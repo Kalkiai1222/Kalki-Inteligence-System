@@ -54,9 +54,6 @@ async function verifyAccess(companyId: string, projectId: string, versionId: str
 
   return { version };
 }
-
-import { existsSync } from 'fs';
-
 function getPythonExe(): string {
   const pythonExe = process.platform === 'win32'
     ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
