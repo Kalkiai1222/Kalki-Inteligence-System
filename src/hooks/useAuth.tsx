@@ -28,9 +28,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data } = await axios.get('/api/auth/me');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const { data } = await axios.get('/api/auth/me', {
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
         setUser(data.user);
       } catch (error) {
+        console.error('Session check failed:', error);
         setUser(null);
       } finally {
         setIsLoading(false);

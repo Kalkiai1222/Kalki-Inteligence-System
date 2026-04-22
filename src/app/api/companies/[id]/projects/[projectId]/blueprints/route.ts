@@ -92,11 +92,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
            const output = execFileSync(pythonExe, [pyScript, localPath], { 
                encoding: 'utf-8', 
                maxBuffer: 50 * 1024 * 1024,
-               stdio: ['ignore', 'pipe', 'pipe'] 
+               stdio: ['ignore', 'pipe', 'pipe'],
+               timeout: 120000 // 120 second timeout for ingestion
            });
            blueprintData = JSON.parse(output);
        } catch (err: any) {
-           console.error('Python ingestion failed:', err.stdout || err.message);
+           console.error('Python ingestion failed:', err.code === 'ETIMEDOUT' ? 'Timeout (120s) - file too complex' : err.stdout || err.message);
            // if python fails we'll still save the file, but without extracted blueprintData
        }
 
@@ -113,7 +114,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                        settings: item.settings || {}
                    }),
                    encoding: 'utf-8',
-                   maxBuffer: 50 * 1024 * 1024
+                   maxBuffer: 50 * 1024 * 1024,
+                   timeout: 120000 // 120 second timeout for geometry detection
                });
                geometryData = JSON.parse(geomOutput);
 
@@ -133,13 +135,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                    env: { ...process.env },
                    encoding: 'utf-8',
                    maxBuffer: 50 * 1024 * 1024,
-                   stdio: ['pipe', 'pipe', 'pipe']
+                   stdio: ['pipe', 'pipe', 'pipe'],
+                   timeout: 180000 // 180 second timeout for 3D reconstruction (needs more time for AI calls)
                });
 
                console.log('3D Generation Output (first 100 chars):', model3DOutput.substring(0, 100));
                model3DData = JSON.parse(model3DOutput);
            } catch (err: any) {
-               console.error('Python calculation failed:', err.stderr || err.stdout || err.message);
+               console.error('Python calculation failed:', err.code === 'ETIMEDOUT' ? `Timeout - ${err.message}` : err.stderr || err.stdout || err.message);
            }
        }
 

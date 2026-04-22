@@ -46,6 +46,22 @@ export async function POST(request: NextRequest) {
       
       let stdoutData = "";
       let stderrData = "";
+      let processCompleted = false;
+
+      // Add 120 second timeout
+      const timeout = setTimeout(() => {
+        if (!processCompleted) {
+          processCompleted = true;
+          pyProcess.kill();
+          console.error("Python pipeline timeout after 120s");
+          resolve(
+            NextResponse.json(
+              { error: "Blueprint processing timeout - file may be too large" },
+              { status: 504 }
+            )
+          );
+        }
+      }, 120000);
 
       pyProcess.stdout.on("data", (data) => {
         stdoutData += data.toString();
@@ -53,11 +69,14 @@ export async function POST(request: NextRequest) {
 
       pyProcess.stderr.on("data", (data) => {
         stderrData += data.toString();
-        // Log python internal logging (INFO/ERROR) to Next.js server console
         console.log(`[Python Pipeline]`, data.toString().trim());
       });
 
       pyProcess.on("close", (code) => {
+        if (processCompleted) return; // Already timed out
+        processCompleted = true;
+        clearTimeout(timeout);
+
         if (code !== 0) {
           console.error(`Pipeline exited with code ${code}`);
           return resolve(
@@ -74,9 +93,11 @@ export async function POST(request: NextRequest) {
           return resolve(NextResponse.json(result, { status: 200 }));
         } catch (e: any) {
           console.error("Failed to parse pipeline output:", e.message);
+          console.error("stdout:", stdoutData);
+          console.error("stderr:", stderrData);
           return resolve(
             NextResponse.json(
-              { error: "Invalid JSON from pipeline", raw: stdoutData },
+              { error: "Invalid JSON from pipeline", raw: stdoutData, stderr: stderrData },
               { status: 500 }
             )
           );
