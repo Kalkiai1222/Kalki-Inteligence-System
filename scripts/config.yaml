@@ -1,0 +1,4 @@
+mesh_quality:
+  require_watertight: true
+  max_non_manifold_edges: 0
+  max_degenerate_faces: 0

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - JWT_SECRET=${JWT_SECRET:-fallback-unsafe-secret}
+      - STORAGE_DRIVER=local
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    volumes:
+      # Persist SQLite Database File
+      - ./prisma:/app/prisma
+      # Persist local uploads if not using S3
+      - ./public/uploads:/app/public/uploads
+    restart: unless-stopped

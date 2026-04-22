@@ -1,0 +1,13 @@
+numpy
+opencv-python
+pymupdf
+shapely
+networkx
+trimesh
+cadquery
+ezdxf
+pyyaml
+pydantic
+faiss-cpu
+sentence-transformers
+scikit-learn

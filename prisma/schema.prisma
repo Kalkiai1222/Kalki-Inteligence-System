@@ -1,0 +1,400 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  name              String?
+  password          String
+  emailVerified     DateTime?
+  verificationToken String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sessions          Session[]
+  memberships       CompanyMember[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  members   CompanyMember[]
+  invites   CompanyInvite[]
+  clients   Client[]
+  projects  Project[]
+  notifications Notification[]
+  elasticMemories ElasticMemory[]
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  projects  Project[]
+
+  @@unique([companyId, name])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  companyId   String
+  clientId    String?
+  name        String
+  description String?
+  status      String   @default("PLANNING") // PLANNING, ACTIVE, COMPLETED, ON_HOLD
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  client      Client?        @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  blueprintSets BlueprintSet[]
+  jobs        Job[]
+  materials   Material[]
+}
+
+model BlueprintSet {
+  id          String   @id @default(uuid())
+  projectId   String
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions    BlueprintVersion[]
+}
+
+model BlueprintVersion {
+  id             String   @id @default(uuid())
+  blueprintSetId String
+  versionNumber  Int
+  fileUrl        String   // url to the actual blueprint file
+  fileKey        String?  // Storage key (e.g. S3 object key)
+  fileSize       Int?     // bytes
+  mimeType       String?  // pdf, png, etc
+  fileHash       String?  // for duplicate detection
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  blueprintSet     BlueprintSet       @relation(fields: [blueprintSetId], references: [id], onDelete: Cascade)
+  blueprintData    BlueprintData?
+  geometryData     BlueprintGeometry?
+  blueprint3DModel Blueprint3DModel?
+  takeoffResult    TakeoffResult?
+  exportArtifacts  ExportArtifact[]
+  reasoningTraces  ReasoningTrace[]
+  corrections      ReasoningCorrection[]
+  meshQualityReport MeshQualityReport?
+  jobs             Job[]
+}
+
+model BlueprintData {
+  id                 String   @id @default(uuid())
+  blueprintVersionId String   @unique
+  lines              String   // JSON string
+  paths              String   // JSON string
+  text               String   // JSON string
+  dimensions         String   // JSON string
+  notes              String   // JSON string
+  annotations        String   // JSON string
+  createdAt          DateTime @default(now())
+
+  blueprintVersion   BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+}
+
+model BlueprintGeometry {
+  id                 String   @id @default(uuid())
+  blueprintVersionId String   @unique
+  walls              String   // JSON string of walls
+  rooms              String   // JSON string of rooms
+  openings           String   // JSON string of doors/windows
+  zones              String   // JSON string for structural zones
+  createdAt          DateTime @default(now())
+
+  blueprintVersion   BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+}
+
+model Blueprint3DModel {
+  id                 String   @id @default(uuid())
+  blueprintVersionId String   @unique
+  objUrl             String?
+  stepUrl            String?
+  usdUrl             String?
+  createdAt          DateTime @default(now())
+
+  blueprintVersion   BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+}
+
+model TakeoffResult {
+  id                 String   @id @default(uuid())
+  blueprintVersionId String   @unique
+  wallSurfaceArea    Float    // SQ Feet
+  floorCeilingArea   Float    // SQ Feet
+  volume             Float    // CU Feet
+  drywallPanels      Int      // Quantity
+  studs              Int      // Quantity
+  paintGallons       Float    // Quantity
+  wasteFactor        Float    // Percentage (e.g. 1.10 for 10% waste)
+  insulationData     String?  // JSON string
+  createdAt          DateTime @default(now())
+
+  blueprintVersion   BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+}
+
+model CompanyMember {
+  id        String   @id @default(uuid())
+  companyId String
+  userId    String
+  role      String   @default("MEMBER") // "ADMIN" or "MEMBER"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+}
+
+model ElasticMemory {
+  id              String   @id @default(uuid())
+  companyId       String
+  memoryType      String   // "CORRECTION", "PATTERN"
+  featureText     String   // The text representation encoded into FAISS
+  correctionData  String   // JSON of the fixed geometry or classification
+  embeddingId     Int      @unique // Incremental ID matching the FAISS index
+  createdAt       DateTime @default(now())
+
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model CompanyInvite {
+  id        String   @id @default(uuid())
+  companyId String
+  email     String
+  role      String   @default("MEMBER")
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, email])
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  projectId   String
+  blueprintVersionId String?
+  name        String
+  description String?
+  status      String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  requiresReview Boolean @default(false)
+  meshQuality String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  blueprintVersion BlueprintVersion? @relation(fields: [blueprintVersionId], references: [id], onDelete: SetNull)
+  materials   Material[]
+  exportArtifacts ExportArtifact[]
+  statusEvents JobStatusEvent[]
+  runAudits   RunAuditRecord[]
+  deadLetterEntry DeadLetterJob?
+
+  @@index([projectId, status])
+  @@index([blueprintVersionId])
+}
+
+model Material {
+  id          String    @id @default(uuid())
+  projectId   String
+  jobId       String?
+  name        String
+  quantity    Float
+  unit        String    // e.g. pieces, tons, meters
+  cost        Float?    // total cost
+  status      String    @default("REQUESTED") // REQUESTED, ORDERED, DELIVERED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  job         Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String
+  companyId   String?
+  title       String
+  message     String
+  type        String    @default("INFO") // INFO, SUCCESS, WARNING, ERROR
+  isRead      Boolean   @default(false)
+  link        String?   // optional url to the resource
+  createdAt   DateTime  @default(now())
+  readAt      DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  userId      String
+  companyId   String?
+  action      String    // CREATE, UPDATE, DELETE, READ, LOGIN, LOGOUT, EXPORT, etc
+  resourceType String   // User, Company, Project, Material, etc
+  resourceId  String
+  changes     String?   // JSON of what changed
+  ipAddress   String?
+  userAgent   String?
+  status      String    @default("SUCCESS") // SUCCESS, FAILURE
+  errorMessage String?
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([companyId])
+  @@index([createdAt])
+  @@index([resourceType])
+}
+
+model ExportArtifact {
+  id               String   @id @default(uuid())
+  jobId            String
+  blueprintVersionId String?
+  artifactType     String   // obj|step|usd
+  filePath         String
+  fileSizeBytes    Int
+  sha256Hash       String
+  isValid          Boolean  @default(false)
+  validationError  String?
+  createdAt        DateTime @default(now())
+
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  blueprintVersion BlueprintVersion? @relation(fields: [blueprintVersionId], references: [id], onDelete: SetNull)
+
+  @@index([jobId, artifactType])
+}
+
+model MeshQualityReport {
+  id                   String   @id @default(uuid())
+  blueprintVersionId   String   @unique
+  isWatertight         Boolean
+  nonManifoldEdgeCount Int
+  invertedNormalCount  Int
+  degenerateFaceCount  Int
+  passed               Boolean
+  failureReasons       String   // JSON array
+  createdAt            DateTime @default(now())
+
+  blueprintVersion BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+}
+
+model ReasoningTrace {
+  id               String   @id @default(uuid())
+  companyId        String
+  projectId        String
+  blueprintVersionId String
+  wallId           String
+  classification   String?
+  sourceReference  String?
+  confidence       Float?
+  reasoning        String
+  lineItems        String?  // JSON
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  blueprintVersion BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, blueprintVersionId, wallId])
+  @@index([companyId, projectId])
+}
+
+model ReasoningCorrection {
+  id                 String   @id @default(uuid())
+  companyId          String
+  projectId          String
+  blueprintVersionId String
+  wallId             String
+  originalReasoning  String
+  correctedReasoning String
+  correctionType     String
+  correctedBy        String
+  storageKey         String
+  createdAt          DateTime @default(now())
+
+  blueprintVersion BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, projectId, blueprintVersionId, wallId])
+}
+
+model JobStatusEvent {
+  id        String   @id @default(uuid())
+  jobId      String
+  status     String
+  createdAt  DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId, createdAt])
+}
+
+model RunAuditRecord {
+  id             String   @id @default(uuid())
+  runId          String   @unique
+  jobId          String
+  startedAt      DateTime
+  endedAt        DateTime?
+  status         String
+  stagesCompleted String   // JSON array
+  errorCode      String?
+  errorDetail    String?
+  outputArtifactIds String? // JSON array
+  createdAt      DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model DeadLetterJob {
+  id         String   @id @default(uuid())
+  jobId      String   @unique
+  reason     String
+  errorCode  String?
+  errorDetail String?
+  payload    String?
+  retryCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
