@@ -133,7 +133,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                    env: { ...process.env },
                    encoding: 'utf-8',
                    maxBuffer: 50 * 1024 * 1024,
-                   stdio: ['ignore', 'pipe', 'pipe']
+                   stdio: ['pipe', 'pipe', 'pipe']
                });
 
                console.log('3D Generation Output (first 100 chars):', model3DOutput.substring(0, 100));
