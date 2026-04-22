@@ -1,23 +1,27 @@
 # Base image
-FROM node:20-alpine AS base
+FROM node:20-bullseye-slim AS base
+
+# Install system dependencies for Python and OpenCV
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies only when needed
 FROM base AS deps
-# Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
-COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
+# Install Node dependencies
+COPY package.json package-lock.json* ./
 COPY prisma ./prisma/
-
-RUN \
-  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-  elif [ -f package-lock.json ]; then npm ci; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
-  else npm ci; \
-  fi
-
+RUN npm ci
 RUN npx prisma generate
 
 # Rebuild the source code only when needed
@@ -26,15 +30,15 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Set up Python virtual environment and install dependencies
+RUN python3 -m venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+RUN /app/.venv/bin/pip install --upgrade pip setuptools wheel
+RUN /app/.venv/bin/pip install -r requirements.txt
+
 # Next.js telemetry is disabled
 ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN \
-  if [ -f yarn.lock ]; then yarn build; \
-  elif [ -f package-lock.json ]; then npm run build; \
-  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm run build; \
-  else npm run build; \
-  fi
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
@@ -43,36 +47,30 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Install OpenSSL for Prisma runtime
-RUN apk add --no-cache openssl
-
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/.venv /app/.venv
+COPY --from=builder /app/scripts ./scripts
+COPY --from=builder /app/pipeline ./pipeline
+COPY --from=builder /app/requirements.txt ./requirements.txt
 
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
+# Copy Prisma schema and generated client
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# Automatically leverage output traces to reduce image size
-# https://nextjs.org/docs/advanced-features/output-file-tracing
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-# Copy Prisma schema and generated client for runtime migrations if required
-COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
+# Set correct permissions
+RUN chown -R nextjs:nodejs /app
 
 USER nextjs
 
 EXPOSE 3000
-
 ENV PORT=3000
-# set hostname to localhost
 ENV HOSTNAME="0.0.0.0"
 
-# server.js is created by next build from the standalone output
-# https://nextjs.org/docs/pages/api-reference/next-config-js/output
+# Start the application
 CMD ["node", "server.js"]

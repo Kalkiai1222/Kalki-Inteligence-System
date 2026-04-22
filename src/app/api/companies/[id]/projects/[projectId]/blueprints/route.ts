@@ -75,14 +75,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
        // Run the ingestion python script via PyMuPDF/OpenCV
        const pyScript = join(process.cwd(), 'scripts', 'process_blueprint.py');
-       // Using the virtual env python executable
-       const pythonExe = process.platform === 'win32' 
+       
+       // Detect python executable with fallback logic
+       let pythonExe = process.platform === 'win32' 
             ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
             : join(process.cwd(), '.venv', 'bin', 'python');
 
+       // Fallback to global python3 if venv is missing
+       if (!existsSync(pythonExe)) {
+           console.warn(`Venv python not found at ${pythonExe}, attempting global 'python3' fallback`);
+           pythonExe = 'python3';
+       }
+
        let blueprintData = null;
        try {
-           const output = execFileSync(pythonExe, [pyScript, localPath], { encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 });
+           const output = execFileSync(pythonExe, [pyScript, localPath], { 
+               encoding: 'utf-8', 
+               maxBuffer: 50 * 1024 * 1024,
+               stdio: ['ignore', 'pipe', 'pipe'] 
+           });
            blueprintData = JSON.parse(output);
        } catch (err: any) {
            console.error('Python ingestion failed:', err.stdout || err.message);

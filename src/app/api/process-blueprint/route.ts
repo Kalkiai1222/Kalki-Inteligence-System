@@ -29,9 +29,15 @@ export async function POST(request: NextRequest) {
     // 2. Call the Python pipeline via child_process
     // Automatically resolve virtual environment python executable
     const isWindows = os.platform() === "win32";
-    const pythonExecutable = isWindows
+    let pythonExecutable = isWindows
       ? path.join(process.cwd(), ".venv", "Scripts", "python.exe")
       : path.join(process.cwd(), ".venv", "bin", "python");
+    
+    const { existsSync } = await import('fs');
+    if (!existsSync(pythonExecutable)) {
+      console.warn(`Venv python not found at ${pythonExecutable}, attempting global 'python3' fallback`);
+      pythonExecutable = "python3";
+    }
       
     const scriptPath = path.join(process.cwd(), "pipeline", "main.py");
 
