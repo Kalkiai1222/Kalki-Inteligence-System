@@ -30,15 +30,17 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set up Python virtual environment and install dependencies
+# Next.js telemetry is disabled
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Run Next.js build first (memory intensive)
+RUN npm run build
+
+# Then set up Python virtual environment (disk intensive)
 RUN python3 -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 RUN /app/.venv/bin/pip install --upgrade pip setuptools wheel
 RUN /app/.venv/bin/pip install -r requirements.txt
-
-# Next.js telemetry is disabled
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

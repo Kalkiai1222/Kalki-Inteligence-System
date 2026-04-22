@@ -1,5 +1,5 @@
 numpy
-opencv-python
+opencv-python-headless
 pymupdf
 shapely
 networkx
@@ -9,5 +9,4 @@ ezdxf
 pyyaml
 pydantic
 faiss-cpu
-sentence-transformers
 scikit-learn
