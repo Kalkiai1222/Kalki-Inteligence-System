@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     await writeFile(filePath, buffer);
 
     // 2. Call the Python pipeline via child_process
-    // Automatically resolve virtual environment python executable
+    // Detect python executable with fallback logic
     const isWindows = os.platform() === "win32";
     let pythonExecutable = isWindows
       ? path.join(process.cwd(), ".venv", "Scripts", "python.exe")

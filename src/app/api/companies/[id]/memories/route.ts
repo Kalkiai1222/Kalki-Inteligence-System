@@ -4,7 +4,18 @@ import { requireAuth } from '@/lib/require-auth';
 import { join } from 'path';
 import { execFileSync } from 'child_process';
 
-const pythonExe = join(process.cwd(), '.venv', 'Scripts', 'python.exe');
+import { existsSync } from 'fs';
+
+const pythonExe = process.platform === 'win32' 
+    ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
+    : join(process.cwd(), '.venv', 'bin', 'python');
+
+function getPython() {
+    if (!existsSync(pythonExe)) {
+        return 'python3';
+    }
+    return pythonExe;
+}
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -50,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
 
     try {
-        const faissOutput = execFileSync(pythonExe, [scriptPath, 'add'], {
+        const faissOutput = execFileSync(getPython(), [scriptPath, 'add'], {
             input: JSON.stringify(faissPayload),
             encoding: 'utf-8',
             maxBuffer: 10 * 1024 * 1024

@@ -15,10 +15,17 @@ const correctionSchema = z.object({
   correction_type: z.enum(['classification', 'material', 'dimension', 'other']),
 });
 
+import { existsSync } from 'fs';
+
 function getPythonExe(): string {
-  return process.platform === 'win32'
+  const pythonExe = process.platform === 'win32'
     ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
     : join(process.cwd(), '.venv', 'bin', 'python');
+    
+  if (!existsSync(pythonExe)) {
+    return 'python3';
+  }
+  return pythonExe;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ jobId: string }> }) {

@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    libfontconfig1 \
+    libx11-6 \
     openssl \
     && rm -rf /var/lib/apt/lists/*
 

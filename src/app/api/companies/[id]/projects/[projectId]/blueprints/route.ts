@@ -132,11 +132,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                    }),
                    env: { ...process.env },
                    encoding: 'utf-8',
-                   maxBuffer: 50 * 1024 * 1024
+                   maxBuffer: 50 * 1024 * 1024,
+                   stdio: ['ignore', 'pipe', 'pipe']
                });
+
+               console.log('3D Generation Output (first 100 chars):', model3DOutput.substring(0, 100));
                model3DData = JSON.parse(model3DOutput);
            } catch (err: any) {
-               console.error('Python calculation failed:', err.stdout || err.message);
+               console.error('Python calculation failed:', err.stderr || err.stdout || err.message);
            }
        }
 

@@ -55,10 +55,18 @@ async function verifyAccess(companyId: string, projectId: string, versionId: str
   return { version };
 }
 
+import { existsSync } from 'fs';
+
 function getPythonExe(): string {
-  return process.platform === 'win32'
+  const pythonExe = process.platform === 'win32'
     ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
     : join(process.cwd(), '.venv', 'bin', 'python');
+    
+  if (!existsSync(pythonExe)) {
+    console.warn(`Venv python not found at ${pythonExe}, attempting global 'python3' fallback`);
+    return 'python3';
+  }
+  return pythonExe;
 }
 
 async function readManualScaleOverride(projectId: string, versionId: string): Promise<number | null> {
