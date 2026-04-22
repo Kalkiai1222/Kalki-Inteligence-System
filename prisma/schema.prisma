@@ -3,10 +3,13 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Render's default Node environment is Debian/Ubuntu with OpenSSL 3.
+  // Including this target prevents Prisma from accidentally shipping a musl + OpenSSL 1.1 engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
