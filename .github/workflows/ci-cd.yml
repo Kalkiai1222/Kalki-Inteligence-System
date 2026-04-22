@@ -34,7 +34,7 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: 1
           # Need a dummy DATABASE_URL for build if using prisma inside getStaticProps/etc
-          DATABASE_URL: "file:./dev.db"
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: "ci-dummy-secret"
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
 
