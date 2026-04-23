@@ -1,0 +1,5 @@
+# Ensure shell scripts always use LF line endings (critical for Linux containers)
+*.sh text eol=lf
+
+# Default behaviour for all other files
+* text=auto
