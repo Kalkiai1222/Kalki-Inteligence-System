@@ -88,4 +88,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Sync database schema and start the application
-CMD npx prisma db push --accept-data-loss && node server.js
+CMD ["sh", "-c", "node /app/node_modules/.bin/prisma db push --accept-data-loss && node server.js"]
