@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 /**
- * Serves 3D model files (OBJ, STEP, USDA) by proxying from stored URLs.
- * This route replaces the static file serving approach which fails
- * on ephemeral filesystems like Render.
+ * Serves 3D model files (OBJ, STEP, USDA) directly from the database.
+ * Files are stored as binary data in the database to avoid ephemeral FS issues on Render.
  *
  * GET /api/models/:modelId/:fileType
  * fileType = "obj" | "step" | "usd"
@@ -13,17 +12,17 @@ import { prisma } from '@/lib/prisma';
 const FILE_TYPE_MAP = {
   obj: {
     contentType: 'model/obj',
-    field: 'objUrl' as const,
+    dataField: 'objData' as const,
     ext: 'obj',
   },
   step: {
     contentType: 'model/step',
-    field: 'stepUrl' as const,
+    dataField: 'stepData' as const,
     ext: 'step',
   },
   usd: {
     contentType: 'model/vnd.usda',
-    field: 'usdUrl' as const,
+    dataField: 'usdData' as const,
     ext: 'usda',
   },
 } as const;
@@ -43,58 +42,27 @@ export async function GET(
 
     const model = await prisma.blueprint3DModel.findUnique({
       where: { id: modelId },
-      select: { [fileTypeDef.field]: true },
+      select: { [fileTypeDef.dataField]: true },
     });
 
     if (!model) {
       return NextResponse.json({ error: 'Model not found' }, { status: 404 });
     }
 
-    const fileUrl = model[fileTypeDef.field];
-    if (!fileUrl) {
+    const fileData = model[fileTypeDef.dataField];
+    if (!fileData) {
       return NextResponse.json(
         { error: 'File content not available' },
         { status: 404 }
       );
     }
 
-    // Validate that fileUrl is an absolute URL (not a relative path)
-    let absoluteUrl: string;
-    try {
-      absoluteUrl = new URL(fileUrl).toString();
-    } catch {
-      // If fileUrl is not a valid absolute URL, it's likely a relative path
-      // This indicates a data integrity issue in the database
-      console.error(
-        `Invalid file URL for modelId=${modelId} fileType=${fileType}: "${fileUrl}" is not an absolute URL`
-      );
+    // fileData is a string, convert to Buffer
+    const buffer = Buffer.from(fileData, 'base64');
+    if (buffer.length === 0) {
       return NextResponse.json(
-        { error: 'File URL is misconfigured' },
-        { status: 500 }
-      );
-    }
-
-    // Proxy the file from the upstream URL (e.g. S3, GCS, etc.)
-    const upstream = await fetch(absoluteUrl);
-    if (!upstream.ok) {
-      console.error(
-        `Upstream fetch failed for modelId=${modelId} fileType=${fileType}: ${upstream.status} ${upstream.statusText}`
-      );
-      return NextResponse.json(
-        { error: 'Failed to fetch file from storage' },
-        { status: 502 }
-      );
-    }
-
-    // Ensure we have a body to send
-    const buffer = await upstream.arrayBuffer();
-    if (buffer.byteLength === 0) {
-      console.error(
-        `Empty response body for modelId=${modelId} fileType=${fileType}`
-      );
-      return NextResponse.json(
-        { error: 'File content is empty' },
-        { status: 502 }
+        { error: 'File is empty' },
+        { status: 404 }
       );
     }
 
@@ -107,7 +75,6 @@ export async function GET(
       headers: {
         'Content-Type': fileTypeDef.contentType,
         'Content-Disposition': `inline; filename="${filename}"`,
-        // Removed `immutable` — model URLs can change for the same modelId
         'Cache-Control': 'public, max-age=86400',
       },
     });
