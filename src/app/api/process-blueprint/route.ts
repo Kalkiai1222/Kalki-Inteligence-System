@@ -3,6 +3,52 @@ import { spawn } from "child_process";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import os from "os";
+import { access } from "fs/promises";
+
+async function canExecutePython(command: string, useVersionFlag = false): Promise<boolean> {
+  return await new Promise<boolean>((resolve) => {
+    const args = useVersionFlag ? ["--version"] : ["-c", "import sys; print(sys.version)"];
+    const proc = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+
+    proc.on("error", () => resolve(false));
+    proc.on("close", (code) => resolve(code === 0));
+  });
+}
+
+async function resolvePythonExecutable(): Promise<string | null> {
+  const isWindows = os.platform() === "win32";
+  const cwd = process.cwd();
+  const candidates = isWindows
+    ? [
+        path.join(cwd, ".venv", "Scripts", "python.exe"),
+        path.join(cwd, "app", ".venv", "Scripts", "python.exe"),
+        "python",
+        "py",
+      ]
+    : [
+        path.join(cwd, ".venv", "bin", "python"),
+        path.join(cwd, ".venv", "bin", "python3"),
+        "/app/.venv/bin/python",
+        "/app/.venv/bin/python3",
+        "python3",
+        "python",
+      ];
+
+  for (const candidate of candidates) {
+    if (candidate.includes(path.sep)) {
+      try {
+        await access(candidate);
+      } catch {
+        continue;
+      }
+      if (await canExecutePython(candidate, true)) return candidate;
+      continue;
+    }
+    if (await canExecutePython(candidate)) return candidate;
+  }
+
+  return null;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,26 +72,30 @@ export async function POST(request: NextRequest) {
     
     await writeFile(filePath, buffer);
 
-    // 2. Call the Python pipeline via child_process
-    // Detect python executable with fallback logic
-    const isWindows = os.platform() === "win32";
-    let pythonExecutable = isWindows
-      ? path.join(process.cwd(), ".venv", "Scripts", "python.exe")
-      : path.join(process.cwd(), ".venv", "bin", "python");
-    
-    const { existsSync } = await import('fs');
-    if (!existsSync(pythonExecutable)) {
-      console.warn(`Venv python not found at ${pythonExecutable}, attempting global 'python3' fallback`);
-      pythonExecutable = "python3";
-    } else {
-      console.log(`Using venv python: ${pythonExecutable}`);
+    // 2. Call the Python pipeline via child_process with resilient runtime detection
+    const pythonExecutable = await resolvePythonExecutable();
+    if (!pythonExecutable) {
+      console.error("No usable Python executable found. Tried venv and system binaries.");
+      return NextResponse.json(
+        {
+          error: "Python runtime unavailable",
+          details: "Unable to locate a working Python interpreter for blueprint pipeline execution.",
+        },
+        { status: 500 }
+      );
     }
+    console.log(`Using python executable: ${pythonExecutable}`);
       
     const scriptPath = path.join(process.cwd(), "pipeline", "main.py");
     console.log(`Spawning: ${pythonExecutable} ${scriptPath} ${filePath}`);
 
     return await new Promise<Response>((resolve) => {
-      const pyProcess = spawn(pythonExecutable, [scriptPath, filePath]);
+      const pyProcess = spawn(pythonExecutable, [scriptPath, filePath], {
+        env: {
+          ...process.env,
+          PATH: `${path.join(process.cwd(), ".venv", os.platform() === "win32" ? "Scripts" : "bin")}${path.delimiter}${process.env.PATH || ""}`,
+        },
+      });
       
       let stdoutData = "";
       let stderrData = "";
