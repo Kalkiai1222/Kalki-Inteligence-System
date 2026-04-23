@@ -84,7 +84,7 @@ export function JobsList({ companyId, projectId }: JobsListProps) {
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Project Jobs</h2>
         <button 
           onClick={() => setIsCreating(!isCreating)}
-          className="flex items-center gap-2 text-sm md:text-base bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 px-5 py-3 min-h-11 rounded-lg font-semibold transition-all duration-200"
+          className="flex items-center gap-2 text-sm bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 px-3 py-2 rounded-lg font-semibold transition-all duration-200"
         >
           <Plus className="w-4 h-4" /> {isCreating ? 'Cancel' : 'Add Job'}
         </button>
@@ -98,7 +98,7 @@ export function JobsList({ companyId, projectId }: JobsListProps) {
               <input 
                 type="text" 
                 autoFocus
-                className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" 
+                className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" 
                 placeholder="e.g., Framing, Electrical, Plumbing"
                 value={newJobName} 
                 onChange={e => setNewJobName(e.target.value)} 
@@ -108,7 +108,7 @@ export function JobsList({ companyId, projectId }: JobsListProps) {
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Description</label>
               <textarea 
-                className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all resize-none" 
+                className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all resize-none" 
                 rows={2}
                 placeholder="Describe the job scope and requirements..."
                 value={newJobDesc} 
@@ -116,8 +116,8 @@ export function JobsList({ companyId, projectId }: JobsListProps) {
               />
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm md:text-base transition-all duration-200 hover:shadow-md">Create Job</button>
-              <button type="button" onClick={() => { setIsCreating(false); setNewJobName(''); setNewJobDesc(''); }} className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-5 py-3 min-h-11 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold text-sm md:text-base transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm transition-all duration-200 hover:shadow-md">Create Job</button>
+              <button type="button" onClick={() => { setIsCreating(false); setNewJobName(''); setNewJobDesc(''); }} className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-4 py-2.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold text-sm transition-colors">Cancel</button>
             </div>
           </form>
         </div>

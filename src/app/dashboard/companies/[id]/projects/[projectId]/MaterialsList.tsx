@@ -84,7 +84,7 @@ export function MaterialsList({ companyId, projectId }: MaterialsListProps) {
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">Procurement & Inventory</h2>
         <button 
           onClick={() => setIsCreating(!isCreating)}
-          className="flex items-center gap-2 text-sm md:text-base bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 px-5 py-3 min-h-11 rounded-lg font-semibold transition-all duration-200"
+          className="flex items-center gap-2 text-sm bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 px-3 py-2 rounded-lg font-semibold transition-all duration-200"
         >
           <Plus className="w-4 h-4" /> {isCreating ? 'Cancel' : 'Add Material'}
         </button>
@@ -96,25 +96,25 @@ export function MaterialsList({ companyId, projectId }: MaterialsListProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Material Name</label>
-                <input type="text" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.name} onChange={e => setNewMaterial({...newMaterial, name: e.target.value})} placeholder="e.g. Concrete Type IV" required />
+                <input type="text" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.name} onChange={e => setNewMaterial({...newMaterial, name: e.target.value})} placeholder="e.g. Concrete Type IV" required />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Quantity</label>
-                  <input type="number" step="0.01" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.quantity} onChange={e => setNewMaterial({...newMaterial, quantity: e.target.value})} required />
+                  <input type="number" step="0.01" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.quantity} onChange={e => setNewMaterial({...newMaterial, quantity: e.target.value})} required />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Unit</label>
-                  <input type="text" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.unit} onChange={e => setNewMaterial({...newMaterial, unit: e.target.value})} placeholder="tons, sqft" required />
+                  <input type="text" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.unit} onChange={e => setNewMaterial({...newMaterial, unit: e.target.value})} placeholder="tons, sqft" required />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Cost Estimate ($)</label>
-                <input type="number" step="0.01" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.cost} onChange={e => setNewMaterial({...newMaterial, cost: e.target.value})} />
+                <input type="number" step="0.01" className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.cost} onChange={e => setNewMaterial({...newMaterial, cost: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Link to Job</label>
-                <select className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.jobId} onChange={e => setNewMaterial({...newMaterial, jobId: e.target.value})}>
+                <select className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" value={newMaterial.jobId} onChange={e => setNewMaterial({...newMaterial, jobId: e.target.value})}>
                   <option value="">-- No specific Job --</option>
                   {jobs.map(job => (
                     <option key={job.id} value={job.id}>{job.name}</option>
@@ -123,8 +123,8 @@ export function MaterialsList({ companyId, projectId }: MaterialsListProps) {
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm md:text-base transition-all duration-200 hover:shadow-md">Submit Request</button>
-              <button type="button" onClick={() => { setIsCreating(false); setNewMaterial({ name: '', quantity: '', unit: '', cost: '', jobId: '' }); }} className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-5 py-3 min-h-11 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold text-sm md:text-base transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm transition-all duration-200 hover:shadow-md">Submit Request</button>
+              <button type="button" onClick={() => { setIsCreating(false); setNewMaterial({ name: '', quantity: '', unit: '', cost: '', jobId: '' }); }} className="flex-1 bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-4 py-2.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-600 font-semibold text-sm transition-colors">Cancel</button>
             </div>
           </form>
         </div>

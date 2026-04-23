@@ -10,6 +10,53 @@ import numpy as np
 import yaml
 from pydantic import BaseModel
 
+
+def extrude_polygon_safe(polygon: Polygon, height: float) -> trimesh.Trimesh:
+    """
+    Resilient polygon extrusion that tries multiple strategies:
+    1. trimesh's native extrude_polygon (requires 'triangle' or 'mapbox-earcut')
+    2. Manual fan-triangulation fallback using raw numpy geometry
+    """
+    # Strategy 1: Use trimesh's built-in extrusion (needs a triangulation engine)
+    try:
+        return trimesh.creation.extrude_polygon(polygon, height=height)
+    except Exception as engine_err:
+        logging.warning(f"trimesh extrude_polygon failed ({engine_err}), using manual fallback")
+
+    # Strategy 2: Manual fan triangulation from polygon exterior coordinates
+    coords_2d = np.array(polygon.exterior.coords[:-1], dtype=np.float64)  # drop closing dup
+    n = len(coords_2d)
+    if n < 3:
+        raise ValueError("Polygon has fewer than 3 vertices")
+
+    # Build bottom and top rings
+    bottom = np.column_stack([coords_2d, np.zeros(n)])
+    top = np.column_stack([coords_2d, np.full(n, height)])
+    vertices = np.vstack([bottom, top])  # indices 0..n-1 = bottom, n..2n-1 = top
+
+    faces = []
+
+    # Bottom cap (fan triangulation, reverse winding for inward normal)
+    for i in range(1, n - 1):
+        faces.append([0, i + 1, i])
+
+    # Top cap (fan triangulation)
+    for i in range(1, n - 1):
+        faces.append([n, n + i, n + i + 1])
+
+    # Side walls (two triangles per quad)
+    for i in range(n):
+        j = (i + 1) % n
+        # bottom[i], bottom[j], top[j], top[i]
+        bi, bj, tj, ti = i, j, n + j, n + i
+        faces.append([bi, bj, tj])
+        faces.append([bi, tj, ti])
+
+    faces = np.array(faces, dtype=np.int64)
+    mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=True)
+    trimesh.repair.fix_normals(mesh)
+    return mesh
+
 # Import new AI material logic module
 from material_logic.insulation_logic import get_ai_material_takeoff
 
@@ -154,10 +201,13 @@ def process_3d(data):
             continue
         poly = Polygon(wall_coords)
         
-        # Trimesh extrusion
-        # Trimesh's creation.extrude_polygon creates a 3D mesh from a 2D shapely polygon
-        mesh = trimesh.creation.extrude_polygon(poly, height=wall_height_inches)
-        meshes.append(mesh)
+        # Resilient extrusion: tries trimesh native engine, falls back to manual triangulation
+        try:
+            mesh = extrude_polygon_safe(poly, height=wall_height_inches)
+            meshes.append(mesh)
+        except Exception as extrude_err:
+            logging.error(f"Skipping wall polygon (extrusion failed): {extrude_err}")
+            continue
 
     if not meshes:
          return {

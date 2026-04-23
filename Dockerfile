@@ -29,6 +29,12 @@ RUN npx prisma generate
 # Build Python environment in its own cacheable layer
 FROM base AS pydeps
 WORKDIR /tmp
+# Install build tools needed by C-extension packages (triangle, scipy, mapbox-earcut)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    python3-dev \
+    gfortran \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt ./
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"

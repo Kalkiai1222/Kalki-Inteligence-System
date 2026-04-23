@@ -122,14 +122,14 @@ export default function ProjectsPage() {
         
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-6 bg-white dark:bg-slate-900 transition-colors p-6 sm:p-8 rounded-xl shadow-sm border border-gray-200 dark:border-slate-800">
           <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-2 leading-snug">Projects</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white tracking-tight mb-2">Projects</h1>
             <a href={`/dashboard/companies/${id}`} className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 text-sm font-medium transition-colors">&larr; Back to Company Dashboard</a>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-             <button onClick={() => setIsCreatingClient(!isCreatingClient)} className="w-full sm:w-auto bg-white dark:bg-slate-800 transition-colors text-gray-700 dark:text-gray-200 px-5 py-3 min-h-11 rounded-lg font-medium border border-gray-300 dark:border-slate-700 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200">
+             <button onClick={() => setIsCreatingClient(!isCreatingClient)} className="w-full sm:w-auto bg-white dark:bg-slate-800 transition-colors text-gray-700 dark:text-gray-200 px-4 py-2.5 rounded-lg font-medium border border-gray-300 dark:border-slate-700 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-all duration-200">
                {isCreatingClient ? '✕ Close' : '+ Add Client'}
              </button>
-             <button onClick={() => setIsCreatingProj(!isCreatingProj)} className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg font-medium hover:bg-indigo-700 active:bg-indigo-800 shadow-sm transition-all duration-200 hover:shadow-md">
+             <button onClick={() => setIsCreatingProj(!isCreatingProj)} className="w-full sm:w-auto bg-indigo-600 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-indigo-700 active:bg-indigo-800 shadow-sm transition-all duration-200 hover:shadow-md">
                {isCreatingProj ? '✕ Close' : '+ New Project'}
              </button>
           </div>
@@ -144,13 +144,13 @@ export default function ProjectsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Client Name</label>
-                <input type="text" required value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Acme Corp" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label><input type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-700 px-3 py-3 min-h-11 border shadow-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Phone</label><input type="text" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-700 px-3 py-3 min-h-11 border shadow-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" /></div>
+                <input type="text" required value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Acme Corp" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Email</label><input type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-700 px-3 py-2 border shadow-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" /></div>
+              <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-200">Phone</label><input type="text" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 dark:border-slate-700 px-3 py-2 border shadow-sm text-gray-900 dark:text-white focus:border-indigo-500 focus:ring-indigo-500" /></div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm md:text-base transition-all duration-200 hover:shadow-md">Save Client</button>
-              <button type="button" onClick={() => setIsCreatingClient(false)} className="flex-1 bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-white px-5 py-3 min-h-11 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 font-semibold text-sm md:text-base transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm transition-all duration-200 hover:shadow-md">Save Client</button>
+              <button type="button" onClick={() => setIsCreatingClient(false)} className="flex-1 bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-white px-4 py-2.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 font-semibold text-sm transition-colors">Cancel</button>
             </div>
           </form>
         )}
@@ -164,23 +164,23 @@ export default function ProjectsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Project Name</label>
-                <input type="text" required value={projForm.name} onChange={e => setProjForm({...projForm, name: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Main Building Renovation" />
+                <input type="text" required value={projForm.name} onChange={e => setProjForm({...projForm, name: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Main Building Renovation" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Client</label>
-                <select value={projForm.clientId} onChange={e => setProjForm({...projForm, clientId: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 min-h-11 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all">
+                <select value={projForm.clientId} onChange={e => setProjForm({...projForm, clientId: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all">
                   <option value="">No Client (Internal)</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Description</label>
-                <textarea value={projForm.description} onChange={e => setProjForm({...projForm, description: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Describe the project scope..." rows={3} />
+                <textarea value={projForm.description} onChange={e => setProjForm({...projForm, description: e.target.value})} className="w-full rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:focus:ring-indigo-400 transition-all" placeholder="Describe the project scope..." rows={3} />
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm md:text-base transition-all duration-200 hover:shadow-md">Create Project</button>
-              <button type="button" onClick={() => setIsCreatingProj(false)} className="flex-1 bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-white px-5 py-3 min-h-11 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 font-semibold text-sm md:text-base transition-colors">Cancel</button>
+              <button type="submit" className="flex-1 bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 font-semibold text-sm transition-all duration-200 hover:shadow-md">Create Project</button>
+              <button type="button" onClick={() => setIsCreatingProj(false)} className="flex-1 bg-gray-200 dark:bg-slate-800 text-gray-900 dark:text-white px-4 py-2.5 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 font-semibold text-sm transition-colors">Cancel</button>
             </div>
           </form>
         )}

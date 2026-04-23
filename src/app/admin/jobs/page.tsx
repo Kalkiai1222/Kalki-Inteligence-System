@@ -80,7 +80,7 @@ export default function AdminJobsPage() {
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-              <div className="relative w-full sm:max-w-40">
+              <div className="relative w-full sm:max-w-[150px]">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
                   <Filter className="h-4 w-4 text-gray-400" />
                 </div>
@@ -138,7 +138,7 @@ export default function AdminJobsPage() {
                                 <tr key={j.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
                                     <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-6">
                                         <div className="font-medium text-gray-900 dark:text-white">{j.name}</div>
-                                        {j.description && <div className="text-gray-500 dark:text-gray-400 max-w-xs truncate mt-0.5" title={j.description}>{j.description}</div>}
+                                        {j.description && <div className="text-gray-500 dark:text-gray-400 max-w-[200px] truncate mt-0.5" title={j.description}>{j.description}</div>}
                                     </td>
                                     <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-400">
                                         <div className="flex flex-col">

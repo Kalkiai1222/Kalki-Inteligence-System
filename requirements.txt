@@ -4,6 +4,9 @@ pymupdf
 shapely
 networkx
 trimesh
+mapbox-earcut
+triangle
+scipy
 cadquery
 ezdxf
 pyyaml

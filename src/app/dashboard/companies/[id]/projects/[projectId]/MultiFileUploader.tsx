@@ -152,7 +152,7 @@ export function MultiFileUploader({ companyId, projectId, onUploadSuccess }: Mul
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 transition-colors p-4 md:p-6 rounded-xl shadow-sm space-y-6 border border-gray-200 dark:border-slate-800 overflow-x-hidden">
+    <div className="bg-white dark:bg-slate-900 transition-colors p-6 rounded-xl shadow-sm space-y-6 border border-gray-200 dark:border-slate-800">
       <div 
         {...getRootProps()} 
         className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${isDragActive ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-600 hover:bg-gray-50 dark:hover:bg-slate-800/50'}`}
@@ -170,7 +170,7 @@ export function MultiFileUploader({ companyId, projectId, onUploadSuccess }: Mul
             <button 
               onClick={uploadFiles} 
               disabled={isProcessing || uploads.every(u => u.status === 'success' || u.status === 'duplicate')}
-              className="bg-indigo-600 text-white px-5 py-3 min-h-11 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base font-semibold flex items-center gap-2 transition-all duration-200 hover:shadow-md"
+              className="bg-indigo-600 text-white px-4 py-2.5 rounded-lg hover:bg-indigo-700 active:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-semibold flex items-center gap-2 transition-all duration-200 hover:shadow-md"
             >
               {isProcessing && <Loader2 className="w-4 h-4 animate-spin" />}
               {isProcessing ? 'Processing...' : 'Upload All'}
@@ -194,7 +194,7 @@ export function MultiFileUploader({ companyId, projectId, onUploadSuccess }: Mul
                   </div>
                   <div>
                     {u.status !== 'uploading' && u.status !== 'hashing' && u.status !== 'success' && u.status !== 'duplicate' && (
-                      <button onClick={() => removeFile(u.id)} className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-semibold ml-2 flex-shrink-0 min-h-11">✕ Remove</button>
+                      <button onClick={() => removeFile(u.id)} className="text-xs text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 font-semibold ml-2 flex-shrink-0">✕ Remove</button>
                     )}
                   </div>
                 </div>
