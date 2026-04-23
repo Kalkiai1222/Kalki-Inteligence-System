@@ -8,6 +8,7 @@ import { existsSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
+import os from 'os';
 
 function sha256File(path: string): string {
   const content = readFileSync(path);
@@ -31,6 +32,64 @@ function validateStepPath(path: string): { isValid: boolean; error: string | nul
   const content = existsSync(path) ? readFileSync(path, 'utf-8') : '';
   const isValid = content.includes('ISO-10303');
   return { isValid, error: isValid ? null : 'STEP header missing ISO-10303 signature' };
+}
+
+function parseJsonFromMixedOutput(output: string): any {
+  const trimmed = output.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      const candidate = trimmed.slice(start, end + 1);
+      return JSON.parse(candidate);
+    }
+    throw new Error('Python returned non-JSON output');
+  }
+}
+
+function canExecutePython(command: string, useVersionFlag = false): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    const args = useVersionFlag ? ['--version'] : ['-c', 'import sys; print(sys.version)'];
+    const proc = execFileSync;
+    try {
+      proc(command, args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 10000 });
+      resolve(true);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function resolvePythonExecutable(): Promise<string | null> {
+  const isWindows = os.platform() === 'win32';
+  const cwd = process.cwd();
+  const candidates = isWindows
+    ? [
+        join(cwd, '.venv', 'Scripts', 'python.exe'),
+        join(cwd, 'app', '.venv', 'Scripts', 'python.exe'),
+        'python',
+        'py',
+      ]
+    : [
+        join(cwd, '.venv', 'bin', 'python'),
+        join(cwd, '.venv', 'bin', 'python3'),
+        '/app/.venv/bin/python',
+        '/app/.venv/bin/python3',
+        'python3',
+        'python',
+      ];
+
+  for (const candidate of candidates) {
+    if (candidate.includes('/') || candidate.includes('\\')) {
+      if (!existsSync(candidate)) continue;
+      if (await canExecutePython(candidate, true)) return candidate;
+      continue;
+    }
+    if (await canExecutePython(candidate)) return candidate;
+  }
+  return null;
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string, projectId: string }> }) {
@@ -76,15 +135,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
        // Run the ingestion python script via PyMuPDF/OpenCV
        const pyScript = join(process.cwd(), 'scripts', 'process_blueprint.py');
        
-       // Detect python executable with fallback logic
-       let pythonExe = process.platform === 'win32' 
-            ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
-            : join(process.cwd(), '.venv', 'bin', 'python');
-
-       // Fallback to global python3 if venv is missing
-       if (!existsSync(pythonExe)) {
-           console.warn(`Venv python not found at ${pythonExe}, attempting global 'python3' fallback`);
-           pythonExe = 'python3';
+       const pythonExe = await resolvePythonExecutable();
+       if (!pythonExe) {
+         throw new Error('No usable Python interpreter found for blueprint pipeline');
        }
 
        let blueprintData = null;
@@ -95,7 +148,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                stdio: ['ignore', 'pipe', 'pipe'],
                timeout: 120000 // 120 second timeout for ingestion
            });
-           blueprintData = JSON.parse(output);
+          blueprintData = parseJsonFromMixedOutput(output);
        } catch (err: any) {
            console.error('Python ingestion failed:', err.code === 'ETIMEDOUT' ? 'Timeout (120s) - file too complex' : err.stdout || err.message);
            // if python fails we'll still save the file, but without extracted blueprintData
@@ -117,7 +170,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                    maxBuffer: 50 * 1024 * 1024,
                    timeout: 120000 // 120 second timeout for geometry detection
                });
-               geometryData = JSON.parse(geomOutput);
+              geometryData = parseJsonFromMixedOutput(geomOutput);
 
                // Generate 3D Reconstruction
                const model3DScript = join(process.cwd(), 'scripts', 'generate_3d.py');
@@ -140,7 +193,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                });
 
                console.log('3D Generation Output (first 100 chars):', model3DOutput.substring(0, 100));
-               model3DData = JSON.parse(model3DOutput);
+              model3DData = parseJsonFromMixedOutput(model3DOutput);
            } catch (err: any) {
                console.error('Python calculation failed:', err.code === 'ETIMEDOUT' ? `Timeout - ${err.message}` : err.stderr || err.stdout || err.message);
            }
