@@ -12,6 +12,5 @@ faiss-cpu
 scikit-learn
 httpx
 python-dotenv
-sentence-transformers
 fastapi
 uvicorn
