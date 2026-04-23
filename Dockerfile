@@ -72,16 +72,17 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/pipeline ./pipeline
 COPY --from=builder /app/requirements.txt ./requirements.txt
 
-# Copy Prisma schema, generated client, and CLI binary
+# Copy Prisma schema, generated client, and full CLI package
+# NOTE: do NOT copy node_modules/.bin/prisma — that bundled wrapper expects
+# prisma_schema_build_bg.wasm as a sibling in .bin/ which won't be there.
+# Instead we call prisma/build/index.js directly (the real CLI entry point).
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
 
-# Copy and prepare the startup entrypoint
-COPY scripts/start.sh ./start.sh
-RUN sed -i 's/\r$//' ./start.sh && chmod +x ./start.sh
+# Write the startup script inline to guarantee LF line endings (no CRLF from Git/Windows)
+RUN printf '#!/bin/sh\nset -e\necho "==> Running Prisma DB push..."\nnode /app/node_modules/prisma/build/index.js db push --accept-data-loss\necho "==> Starting Next.js server..."\nexec node /app/server.js\n' > /app/start.sh && chmod +x /app/start.sh
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
@@ -93,4 +94,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Sync database schema and start the application
-CMD ["/app/start.sh"]
+CMD ["/bin/sh", "/app/start.sh"]
