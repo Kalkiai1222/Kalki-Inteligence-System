@@ -76,6 +76,7 @@ COPY --from=builder /app/requirements.txt ./requirements.txt
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
@@ -86,5 +87,5 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Start the application
-CMD ["node", "server.js"]
+# Sync database schema and start the application
+CMD npx prisma db push --accept-data-loss && node server.js
