@@ -40,6 +40,7 @@ RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN /opt/venv/bin/pip install --upgrade pip setuptools wheel
 RUN /opt/venv/bin/pip install -r requirements.txt
+RUN /opt/venv/bin/pip install --upgrade pip
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -81,8 +82,9 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Write the startup script inline to guarantee LF line endings (no CRLF from Git/Windows)
-RUN printf '#!/bin/sh\nset -e\necho "==> Running Prisma DB push..."\nnode /app/node_modules/prisma/build/index.js db push --accept-data-loss\necho "==> Starting Next.js server..."\nexec node /app/server.js\n' > /app/start.sh && chmod +x /app/start.sh
+# Copy and fix the startup script (ensures LF line endings)
+COPY scripts/start.sh /app/start.sh
+RUN chmod +x /app/start.sh && dos2unix /app/start.sh 2>/dev/null || sed -i 's/\r$//' /app/start.sh
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
