@@ -72,11 +72,16 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/pipeline ./pipeline
 COPY --from=builder /app/requirements.txt ./requirements.txt
 
-# Copy Prisma schema and generated client
+# Copy Prisma schema, generated client, and CLI binary
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+
+# Copy and prepare the startup entrypoint
+COPY scripts/start.sh ./start.sh
+RUN sed -i 's/\r$//' ./start.sh && chmod +x ./start.sh
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
@@ -88,4 +93,4 @@ ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Sync database schema and start the application
-CMD npx prisma db push --accept-data-loss && node server.js
+CMD ["/app/start.sh"]
