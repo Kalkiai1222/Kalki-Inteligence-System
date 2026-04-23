@@ -121,6 +121,15 @@ Return strictly in the following JSON schema:
         
         parsed = json.loads(result_json)
         
+        # Ensure all integer fields are actually integers (LLM may return floats)
+        if "materials" in parsed:
+            parsed["materials"]["drywallPanelsTotal"] = int(parsed["materials"].get("drywallPanelsTotal", 0))
+            parsed["materials"]["studsTotal"] = int(parsed["materials"].get("studsTotal", 0))
+        
+        for detail in parsed.get("perWallDetails", []):
+            detail["studs"] = int(detail.get("studs", 0))
+            detail["drywallPanels"] = round(detail.get("drywallPanels", 0.0), 2)
+        
         # Re-attach audit metadata
         for detail in parsed.get("perWallDetails", []):
             idx = detail.get("wallIndex")

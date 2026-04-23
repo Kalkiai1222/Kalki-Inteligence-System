@@ -344,7 +344,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     
     return NextResponse.json({ blueprintSets: createdSets }, { status: 201 });
   } catch (err: any) {
-    console.error("Blueprint upload error", err);
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 });
+    console.error("Blueprint upload error", err.message, err.stack);
+    return NextResponse.json({ error: err.message || 'Server error', details: err.stack }, { status: 500 });
   }
 }
