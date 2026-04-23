@@ -492,6 +492,7 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
           },
         });
       }
+    }
 
     const scaleResult = detectScale({
       manualScale,

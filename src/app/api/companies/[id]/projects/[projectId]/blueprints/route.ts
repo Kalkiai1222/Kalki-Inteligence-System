@@ -384,7 +384,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
        }
        if (hasStep && created3DModel) {
         const stepContent = model3DData?.step || '';
-        const validation = validateStepPath ? { isValid: stepContent.includes('ISO-10303'), error: stepContent.includes('ISO-10303') ? null : 'STEP header missing ISO-10303 signature' } : { isValid: true, error: null };
+        const isValidStep = stepContent.includes('ISO-10303');
+        const validation = { isValid: isValidStep, error: isValidStep ? null : 'STEP header missing ISO-10303 signature' };
         await prisma.exportArtifact.create({
           data: {
             jobId: job.id,
