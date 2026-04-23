@@ -28,23 +28,21 @@ RUN npx prisma generate
 
 # Build Python environment in its own cacheable layer
 FROM base AS pydeps
-WORKDIR /app
+WORKDIR /tmp
 COPY requirements.txt ./
-RUN python3 -m venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
-RUN /app/.venv/bin/pip install --upgrade pip setuptools wheel
-RUN /app/.venv/bin/pip install -r requirements.txt
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN /opt/venv/bin/pip install --upgrade pip setuptools wheel
+RUN /opt/venv/bin/pip install -r requirements.txt
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=pydeps /app/.venv /app/.venv
 COPY . .
 
 # Next.js telemetry is disabled
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV PATH="/app/.venv/bin:$PATH"
 
 # Run Next.js build first (memory intensive)
 RUN npm run build
@@ -63,7 +61,7 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/.venv /app/.venv
+COPY --from=pydeps --chown=nextjs:nodejs /opt/venv /app/.venv
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/pipeline ./pipeline
 COPY --from=builder /app/requirements.txt ./requirements.txt
