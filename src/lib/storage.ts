@@ -36,7 +36,7 @@ export async function generateUploadUrl(fileName: string, mimeType: string, proj
     // Local Enterprise Fallback implementation (Secure Local API mimicking S3 Signed URL)
     // Generates a short-lived token to upload securely to /api/upload/local
     // using a similar pattern to a signed S3 upload
-    const token = uuidv4(); 
+    const token = uuidv4();
     return {
       uploadUrl: `/api/upload/local?key=${encodeURIComponent(fileKey)}&token=${token}`,
       fileUrl: `/uploads/${fileKey}`,

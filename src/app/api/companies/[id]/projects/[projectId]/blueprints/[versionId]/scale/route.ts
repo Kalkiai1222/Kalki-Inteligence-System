@@ -58,7 +58,7 @@ function getPythonExe(): string {
   const pythonExe = process.platform === 'win32'
     ? join(process.cwd(), '.venv', 'Scripts', 'python.exe')
     : join(process.cwd(), '.venv', 'bin', 'python');
-    
+
   if (!existsSync(pythonExe)) {
     console.warn(`Venv python not found at ${pythonExe}, attempting global 'python3' fallback`);
     return 'python3';
@@ -368,7 +368,7 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
     if (hasObj || hasStep || hasUsd) {
       created3DModel = await prisma.blueprint3DModel.upsert({
         where: { blueprintVersionId: versionId },
-        update: { 
+        update: {
           objUrl: hasObj ? 'pending' : null,
           stepUrl: hasStep ? 'pending' : null,
           usdUrl: hasUsd ? 'pending' : null,
@@ -376,8 +376,8 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
           stepData: hasStep ? model3DData.step : null,
           usdData: hasUsd ? model3DData.usd : null,
         },
-        create: { 
-          blueprintVersionId: versionId, 
+        create: {
+          blueprintVersionId: versionId,
           objUrl: hasObj ? 'pending' : null,
           stepUrl: hasStep ? 'pending' : null,
           usdUrl: hasUsd ? 'pending' : null,

@@ -79,19 +79,19 @@ async function resolvePythonExecutable(): Promise<string | null> {
   const cwd = process.cwd();
   const candidates = isWindows
     ? [
-        join(cwd, '.venv', 'Scripts', 'python.exe'),
-        join(cwd, 'app', '.venv', 'Scripts', 'python.exe'),
-        'python',
-        'py',
-      ]
+      join(cwd, '.venv', 'Scripts', 'python.exe'),
+      join(cwd, 'app', '.venv', 'Scripts', 'python.exe'),
+      'python',
+      'py',
+    ]
     : [
-        join(cwd, '.venv', 'bin', 'python'),
-        join(cwd, '.venv', 'bin', 'python3'),
-        '/app/.venv/bin/python',
-        '/app/.venv/bin/python3',
-        'python3',
-        'python',
-      ];
+      join(cwd, '.venv', 'bin', 'python'),
+      join(cwd, '.venv', 'bin', 'python3'),
+      '/app/.venv/bin/python',
+      '/app/.venv/bin/python3',
+      'python3',
+      'python',
+    ];
 
   for (const candidate of candidates) {
     if (candidate.includes('/') || candidate.includes('\\')) {
@@ -122,208 +122,214 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!Array.isArray(payloads)) return NextResponse.json({ error: 'Payload must be an array of blueprint versions' }, { status: 400 });
 
     const createdSets = [];
-    
+
     for (const item of payloads) {
-       let { name, fileUrl, fileKey, fileSize, mimeType, fileHash, notes } = item;
-       if (!name || !fileUrl) throw new Error('Name and fileUrl are strictly required');
+      let { name, fileUrl, fileKey, fileSize, mimeType, fileHash, notes } = item;
+      if (!name || !fileUrl) throw new Error('Name and fileUrl are strictly required');
 
-       let localPath = '';
-       let isTemp = false;
+      let localPath = '';
+      let isTemp = false;
 
-       // Attempt to locate the file for processing
-       if (fileUrl.startsWith('/uploads/')) {
-          localPath = join(process.cwd(), 'public', fileUrl);
-       } else {
-          // It's a remote URL (like S3), download temporarily
-          const res = await fetch(fileUrl);
-          if (!res.ok) throw new Error(`Could not fetch file from ${fileUrl}`);
-          const arrayBuffer = await res.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          localPath = join(tmpdir(), `${uuidv4()}.pdf`);
-          await writeFile(localPath, buffer);
-          isTemp = true;
-       }
+      // Attempt to locate the file for processing
+      if (fileUrl.startsWith('/uploads/')) {
+        localPath = join(process.cwd(), 'public', fileUrl);
+      } else {
+        // It's a remote URL (like S3), download temporarily
+        const res = await fetch(fileUrl);
+        if (!res.ok) throw new Error(`Could not fetch file from ${fileUrl}`);
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        localPath = join(tmpdir(), `${uuidv4()}.pdf`);
+        await writeFile(localPath, buffer);
+        isTemp = true;
+      }
 
-       // Run the ingestion python script via PyMuPDF/OpenCV
-       const pyScript = join(process.cwd(), 'scripts', 'process_blueprint.py');
-       
-       const pythonExe = await resolvePythonExecutable();
-       if (!pythonExe) {
-         throw new Error('No usable Python interpreter found for blueprint pipeline');
-       }
+      // Run the ingestion python script via PyMuPDF/OpenCV
+      const pyScript = join(process.cwd(), 'scripts', 'process_blueprint.py');
 
-       let blueprintData = null;
-       try {
-           const output = execFileSync(pythonExe, [pyScript, localPath], { 
-               encoding: 'utf-8', 
-               maxBuffer: 50 * 1024 * 1024,
-               stdio: ['ignore', 'pipe', 'pipe'],
-               timeout: INGESTION_TIMEOUT_MS,
-           });
-          blueprintData = parseJsonFromMixedOutput(output);
-       } catch (err: any) {
-           const detail = err?.code === 'ETIMEDOUT'
-             ? 'Timeout (120s) - file too complex'
-             : toErrorMessage(err);
-           throw new Error(`PIPELINE_STAGE_INGESTION_FAILED: ${detail}`);
-       }
+      const pythonExe = await resolvePythonExecutable();
+      if (!pythonExe) {
+        throw new Error('No usable Python interpreter found for blueprint pipeline');
+      }
 
-       if (!blueprintData || blueprintData.status !== 'success' || !blueprintData.data) {
-         throw new Error('PIPELINE_STAGE_INGESTION_FAILED: ingestion did not return success payload');
-       }
+      let blueprintData = null;
+      try {
+        const output = execFileSync(pythonExe, [pyScript, localPath], {
+          encoding: 'utf-8',
+          maxBuffer: 50 * 1024 * 1024,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: INGESTION_TIMEOUT_MS,
+        });
+        blueprintData = parseJsonFromMixedOutput(output);
+      } catch (err: any) {
+        const detail = err?.code === 'ETIMEDOUT'
+          ? 'Timeout (120s) - file too complex'
+          : toErrorMessage(err);
+        throw new Error(`PIPELINE_STAGE_INGESTION_FAILED: ${detail}`);
+      }
 
-       let geometryData: any = null;
-       let model3DData: any = null;
-       const geomScript = join(process.cwd(), 'scripts', 'extract_geometry.py');
-       try {
-         const geomOutput = execFileSync(pythonExe, [geomScript], {
-           input: JSON.stringify({
-             ...blueprintData.data,
-             companyId: id,
-             manualScale: item.manualScale || undefined,
-             settings: {
-               ...(item.settings || {}),
-               // Classification can be expensive and is non-critical for geometry extraction.
-               enableSemanticClassification: item.settings?.enableSemanticClassification ?? false,
-             },
-           }),
-           encoding: 'utf-8',
-           maxBuffer: 50 * 1024 * 1024,
-           timeout: GEOMETRY_TIMEOUT_MS,
-         });
-         geometryData = parseJsonFromMixedOutput(geomOutput);
-       } catch (err: any) {
-         const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (120s)' : toErrorMessage(err);
-         throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: ${detail}`);
-       }
+      if (!blueprintData || blueprintData.status !== 'success' || !blueprintData.data) {
+        throw new Error('PIPELINE_STAGE_INGESTION_FAILED: ingestion did not return success payload');
+      }
 
-       if (!geometryData || geometryData.error || !Array.isArray(geometryData.walls) || !Array.isArray(geometryData.rooms)) {
-         throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: invalid geometry payload (${JSON.stringify(geometryData?.error || geometryData)})`);
-       }
+      let geometryData: any = null;
+      let model3DData: any = null;
+      const geomScript = join(process.cwd(), 'scripts', 'extract_geometry.py');
+      try {
+        const geomOutput = execFileSync(pythonExe, [geomScript], {
+          input: JSON.stringify({
+            ...blueprintData.data,
+            companyId: id,
+            manualScale: item.manualScale || undefined,
+            settings: {
+              ...(item.settings || {}),
+              // Classification can be expensive and is non-critical for geometry extraction.
+              enableSemanticClassification: item.settings?.enableSemanticClassification ?? false,
+            },
+          }),
+          encoding: 'utf-8',
+          maxBuffer: 50 * 1024 * 1024,
+          timeout: GEOMETRY_TIMEOUT_MS,
+        });
+        geometryData = parseJsonFromMixedOutput(geomOutput);
+      } catch (err: any) {
+        const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (120s)' : toErrorMessage(err);
+        throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: ${detail}`);
+      }
 
-       // Generate 3D Reconstruction
-       const model3DScript = join(process.cwd(), 'scripts', 'generate_3d.py');
-       try {
-         const model3DOutput = execFileSync(pythonExe, [model3DScript], {
-           input: JSON.stringify({
-             walls: geometryData.walls || [],
-             rooms: geometryData.rooms || [],
-             notes: blueprintData.data.notes || [],
-             text: blueprintData.data.text || [],
-             settings: {
-               ...(item.settings || {}),
-               ...geometryData.settingsUsed,
-             },
-           }),
-           env: { ...process.env },
-           encoding: 'utf-8',
-           maxBuffer: 50 * 1024 * 1024,
-           stdio: ['pipe', 'pipe', 'pipe'],
-           timeout: RECONSTRUCTION_TIMEOUT_MS,
-         });
+      if (!geometryData || geometryData.error || !Array.isArray(geometryData.walls) || !Array.isArray(geometryData.rooms)) {
+        throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: invalid geometry payload (${JSON.stringify(geometryData?.error || geometryData)})`);
+      }
 
-         model3DData = parseJsonFromMixedOutput(model3DOutput);
-       } catch (err: any) {
-         const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (180s)' : toErrorMessage(err);
-         throw new Error(`PIPELINE_STAGE_3D_FAILED: ${detail}`);
-       }
+      // Generate 3D Reconstruction
+      const model3DScript = join(process.cwd(), 'scripts', 'generate_3d.py');
+      try {
+        const model3DOutput = execFileSync(pythonExe, [model3DScript], {
+          input: JSON.stringify({
+            walls: geometryData.walls || [],
+            rooms: geometryData.rooms || [],
+            notes: blueprintData.data.notes || [],
+            text: blueprintData.data.text || [],
+            settings: {
+              ...(item.settings || {}),
+              ...geometryData.settingsUsed,
+            },
+          }),
+          env: { ...process.env },
+          encoding: 'utf-8',
+          maxBuffer: 50 * 1024 * 1024,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: RECONSTRUCTION_TIMEOUT_MS,
+        });
 
-       if (!model3DData || model3DData.error || model3DData.status !== 'success' || !model3DData.takeoff) {
-         throw new Error(`PIPELINE_STAGE_3D_FAILED: invalid reconstruction payload (${JSON.stringify(model3DData?.error || model3DData)})`);
-       }
+        model3DData = parseJsonFromMixedOutput(model3DOutput);
+      } catch (err: any) {
+        const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (180s)' : toErrorMessage(err);
+        throw new Error(`PIPELINE_STAGE_3D_FAILED: ${detail}`);
+      }
 
-       if (isTemp) {
-          try { await unlink(localPath); } catch (e) {}
-       }
+      if (!model3DData || model3DData.error || model3DData.status !== 'success' || !model3DData.takeoff) {
+        throw new Error(`PIPELINE_STAGE_3D_FAILED: invalid reconstruction payload (${JSON.stringify(model3DData?.error || model3DData)})`);
+      }
 
-       // Store derived model content directly in the database
-       // (Render uses an ephemeral filesystem — files in public/uploads are lost on deploy)
-       const hasObj = !!(model3DData && model3DData.status === 'success' && model3DData.obj);
-       const hasStep = !!(model3DData && model3DData.status === 'success' && model3DData.step);
-       const hasUsd = !!(model3DData && model3DData.status === 'success' && model3DData.usd);
+      if (isTemp) {
+        try { await unlink(localPath); } catch (e) { }
+      }
 
-       // Now store to DB
-       const blueprintSet = await prisma.blueprintSet.create({
-          data: {
-            projectId,
-            name,
-            versions: {
-              create: {
-                versionNumber: 1,
-                fileUrl,
-                fileKey,
-                fileSize,
-                mimeType,
-                fileHash,
-                notes,
-                blueprintData: {
-                  create: {
-                    lines: JSON.stringify(blueprintData.data.lines || []),
-                    paths: JSON.stringify(blueprintData.data.paths || []),
-                    text: JSON.stringify(blueprintData.data.text || []),
-                    dimensions: JSON.stringify(blueprintData.data.dimensions || []),
-                    notes: JSON.stringify(blueprintData.data.notes || []),
-                    annotations: JSON.stringify(blueprintData.data.annotations || []),
-                  },
+      // Store derived model content directly in the database
+      // (Render uses an ephemeral filesystem — files in public/uploads are lost on deploy)
+      const hasObj = !!(model3DData && model3DData.status === 'success' && model3DData.obj);
+      const hasStep = !!(model3DData && model3DData.status === 'success' && model3DData.step);
+      const hasUsd = !!(model3DData && model3DData.status === 'success' && model3DData.usd);
+
+      // Now store to DB
+      const blueprintSet = await prisma.blueprintSet.create({
+        data: {
+          projectId,
+          name,
+          versions: {
+            create: {
+              versionNumber: 1,
+              fileUrl,
+              fileKey,
+              fileSize,
+              mimeType,
+              fileHash,
+              notes,
+              blueprintData: {
+                create: {
+                  lines: JSON.stringify(blueprintData.data.lines || []),
+                  paths: JSON.stringify(blueprintData.data.paths || []),
+                  text: JSON.stringify(blueprintData.data.text || []),
+                  dimensions: JSON.stringify(blueprintData.data.dimensions || []),
+                  notes: JSON.stringify(blueprintData.data.notes || []),
+                  annotations: JSON.stringify(blueprintData.data.annotations || []),
                 },
-                geometryData: {
-                  create: {
-                    walls: JSON.stringify(geometryData.walls || []),
-                    rooms: JSON.stringify(geometryData.rooms || []),
-                    openings: JSON.stringify(geometryData.openings || []),
-                    zones: JSON.stringify(geometryData.zones || []),
-                  },
+              },
+              geometryData: {
+                create: {
+                  walls: JSON.stringify(geometryData.walls || []),
+                  rooms: JSON.stringify(geometryData.rooms || []),
+                  openings: JSON.stringify(geometryData.openings || []),
+                  zones: JSON.stringify(geometryData.zones || []),
                 },
-                ...((hasObj || hasStep || hasUsd) ? {
-                  blueprint3DModel: {
-                    create: {
-                      // URLs will be updated after creation to include the model ID
-                      objUrl: hasObj ? 'pending' : null,
-                      stepUrl: hasStep ? 'pending' : null,
-                      usdUrl: hasUsd ? 'pending' : null,
-                      objData: hasObj ? model3DData.obj : null,
-                      stepData: hasStep ? model3DData.step : null,
-                      usdData: hasUsd ? model3DData.usd : null,
-                    }
-                  }
-                } : {}),
-                takeoffResult: {
-                  create: {
-                    wallSurfaceArea: model3DData.takeoff.wallSurfaceArea,
-                    floorCeilingArea: model3DData.takeoff.floorCeilingArea,
-                    volume: model3DData.takeoff.volume,
-                    drywallPanels: model3DData.takeoff.drywallPanels,
-                    studs: model3DData.takeoff.studs,
-                    paintGallons: model3DData.takeoff.paintGallons,
-                    wasteFactor: model3DData.takeoff.wasteFactor,
-                    insulationData: model3DData.takeoff.insulation ? JSON.stringify(model3DData.takeoff.insulation) : null,
-                  },
+              },
+              blueprint3DModel: (hasObj || hasStep || hasUsd) ? {
+                create: {
+                  objUrl: hasObj ? 'pending' : null,
+                  stepUrl: hasStep ? 'pending' : null,
+                  usdUrl: hasUsd ? 'pending' : null,
+                  objData: hasObj ? model3DData.obj : null,
+                  stepData: hasStep ? model3DData.step : null,
+                  usdData: hasUsd ? model3DData.usd : null,
+                }
+              } : undefined,
+              takeoffResult: {
+                create: {
+                  wallSurfaceArea: model3DData.takeoff.wallSurfaceArea,
+                  floorCeilingArea: model3DData.takeoff.floorCeilingArea,
+                  volume: model3DData.takeoff.volume,
+                  drywallPanels: model3DData.takeoff.drywallPanels,
+                  studs: model3DData.takeoff.studs,
+                  paintGallons: model3DData.takeoff.paintGallons,
+                  wasteFactor: model3DData.takeoff.wasteFactor,
+                  insulationData: model3DData.takeoff.insulation ? JSON.stringify(model3DData.takeoff.insulation) : null,
                 },
-              }
+              },
             }
+          }
+        },
+        include: { 
+          versions: { 
+            include: { 
+              blueprintData: true, 
+              geometryData: true, 
+              blueprint3DModel: true, 
+              takeoffResult: true 
+            } 
+          } 
+        }
+      });
+
+      // Update the 3D model URLs to point to the API serving route
+      const created3DModel = blueprintSet.versions[0]?.blueprint3DModel;
+      if (created3DModel) {
+        await prisma.blueprint3DModel.update({
+          where: { id: created3DModel.id },
+          data: {
+            objUrl: hasObj ? `/api/models/${created3DModel.id}/obj` : null,
+            stepUrl: hasStep ? `/api/models/${created3DModel.id}/step` : null,
+            usdUrl: hasUsd ? `/api/models/${created3DModel.id}/usd` : null,
           },
-          include: { versions: { include: { blueprintData: true, geometryData: true, blueprint3DModel: true, takeoffResult: true } } }
-       });
+        });
+        // Refresh the blueprint set data so the response includes correct URLs
+        blueprintSet.versions[0].blueprint3DModel!.objUrl = hasObj ? `/api/models/${created3DModel.id}/obj` : null;
+        blueprintSet.versions[0].blueprint3DModel!.stepUrl = hasStep ? `/api/models/${created3DModel.id}/step` : null;
+        blueprintSet.versions[0].blueprint3DModel!.usdUrl = hasUsd ? `/api/models/${created3DModel.id}/usd` : null;
+      }
+      const createdVersion = blueprintSet.versions[0];
 
-       // Update the 3D model URLs to point to the API serving route
-       const created3DModel = blueprintSet.versions[0]?.blueprint3DModel;
-       if (created3DModel) {
-         await prisma.blueprint3DModel.update({
-           where: { id: created3DModel.id },
-           data: {
-             objUrl: hasObj ? `/api/models/${created3DModel.id}/obj` : null,
-             stepUrl: hasStep ? `/api/models/${created3DModel.id}/step` : null,
-             usdUrl: hasUsd ? `/api/models/${created3DModel.id}/usd` : null,
-           },
-         });
-         // Refresh the blueprint set data so the response includes correct URLs
-         blueprintSet.versions[0].blueprint3DModel!.objUrl = hasObj ? `/api/models/${created3DModel.id}/obj` : null;
-         blueprintSet.versions[0].blueprint3DModel!.stepUrl = hasStep ? `/api/models/${created3DModel.id}/step` : null;
-         blueprintSet.versions[0].blueprint3DModel!.usdUrl = hasUsd ? `/api/models/${created3DModel.id}/usd` : null;
-       }
-       const createdVersion = blueprintSet.versions[0];
-
-       if (model3DData?.takeoff?.perWallDetails && Array.isArray(model3DData.takeoff.perWallDetails)) {
+      if (model3DData?.takeoff?.perWallDetails && Array.isArray(model3DData.takeoff.perWallDetails)) {
         await prisma.reasoningTrace.deleteMany({
           where: { projectId, blueprintVersionId: createdVersion.id },
         });
@@ -343,9 +349,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             },
           });
         }
-       }
+      }
 
-       const job = await prisma.job.create({
+      const job = await prisma.job.create({
         data: {
           projectId,
           blueprintVersionId: createdVersion.id,
@@ -355,8 +361,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           startDate: new Date(),
           endDate: new Date(),
         },
-       });
-       await prisma.jobStatusEvent.createMany({
+      });
+      await prisma.jobStatusEvent.createMany({
         data: [
           { jobId: job.id, status: 'uploaded' },
           { jobId: job.id, status: 'processing' },
@@ -364,9 +370,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           { jobId: job.id, status: 'quality_check' },
           { jobId: job.id, status: 'export_ready' },
         ],
-       });
+      });
 
-       if (hasObj && created3DModel) {
+      if (hasObj && created3DModel) {
         const validation = validateObjContent(model3DData?.obj || '');
         const objContent = model3DData?.obj || '';
         await prisma.exportArtifact.create({
@@ -381,8 +387,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             validationError: validation.error,
           },
         });
-       }
-       if (hasStep && created3DModel) {
+      }
+      if (hasStep && created3DModel) {
         const stepContent = model3DData?.step || '';
         const isValidStep = stepContent.includes('ISO-10303');
         const validation = { isValid: isValidStep, error: isValidStep ? null : 'STEP header missing ISO-10303 signature' };
@@ -398,8 +404,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             validationError: validation.error,
           },
         });
-       }
-       if (hasUsd && created3DModel) {
+      }
+      if (hasUsd && created3DModel) {
         const validation = validateUsdContent(model3DData?.usd || '');
         const usdContent = model3DData?.usd || '';
         await prisma.exportArtifact.create({
@@ -414,11 +420,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             validationError: validation.error,
           },
         });
-       }
+      }
 
-       createdSets.push({ ...blueprintSet, jobId: job.id });
+      createdSets.push({ ...blueprintSet, jobId: job.id });
     }
-    
+
     return NextResponse.json({ blueprintSets: createdSets }, { status: 201 });
   } catch (err: any) {
     console.error("Blueprint upload error", err.message, err.stack);

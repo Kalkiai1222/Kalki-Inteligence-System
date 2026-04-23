@@ -22,19 +22,19 @@ async function resolvePythonExecutable(): Promise<string | null> {
   const cwd = process.cwd();
   const candidates = isWindows
     ? [
-        path.join(cwd, ".venv", "Scripts", "python.exe"),
-        path.join(cwd, "app", ".venv", "Scripts", "python.exe"),
-        "python",
-        "py",
-      ]
+      path.join(cwd, ".venv", "Scripts", "python.exe"),
+      path.join(cwd, "app", ".venv", "Scripts", "python.exe"),
+      "python",
+      "py",
+    ]
     : [
-        path.join(cwd, ".venv", "bin", "python"),
-        path.join(cwd, ".venv", "bin", "python3"),
-        "/app/.venv/bin/python",
-        "/app/.venv/bin/python3",
-        "python3",
-        "python",
-      ];
+      path.join(cwd, ".venv", "bin", "python"),
+      path.join(cwd, ".venv", "bin", "python3"),
+      "/app/.venv/bin/python",
+      "/app/.venv/bin/python3",
+      "python3",
+      "python",
+    ];
 
   for (const candidate of candidates) {
     if (candidate.includes(path.sep)) {
@@ -64,14 +64,14 @@ export async function POST(request: NextRequest) {
     // 1. Save the file locally so Python can access it
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    
+
     const uploadDir = path.join(process.cwd(), "public", "uploads", "blueprints");
     await mkdir(uploadDir, { recursive: true });
-    
+
     // Sanitize filename and create absolute path
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
     const filePath = path.join(uploadDir, `${Date.now()}-${safeName}`);
-    
+
     await writeFile(filePath, buffer);
 
     // 2. Call the Python pipeline via child_process with resilient runtime detection
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       );
     }
     console.log(`Using python executable: ${pythonExecutable}`);
-      
+
     const scriptPath = path.join(process.cwd(), "pipeline", "main.py");
     console.log(`Spawning: ${pythonExecutable} ${scriptPath} ${filePath}`);
 
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
           PATH: `${path.join(process.cwd(), ".venv", os.platform() === "win32" ? "Scripts" : "bin")}${path.delimiter}${process.env.PATH || ""}`,
         },
       });
-      
+
       let stdoutData = "";
       let stderrData = "";
       let processCompleted = false;
