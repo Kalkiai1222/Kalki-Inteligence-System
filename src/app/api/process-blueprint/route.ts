@@ -37,9 +37,12 @@ export async function POST(request: NextRequest) {
     if (!existsSync(pythonExecutable)) {
       console.warn(`Venv python not found at ${pythonExecutable}, attempting global 'python3' fallback`);
       pythonExecutable = "python3";
+    } else {
+      console.log(`Using venv python: ${pythonExecutable}`);
     }
       
     const scriptPath = path.join(process.cwd(), "pipeline", "main.py");
+    console.log(`Spawning: ${pythonExecutable} ${scriptPath} ${filePath}`);
 
     return await new Promise<Response>((resolve) => {
       const pyProcess = spawn(pythonExecutable, [scriptPath, filePath]);
@@ -79,9 +82,11 @@ export async function POST(request: NextRequest) {
 
         if (code !== 0) {
           console.error(`Pipeline exited with code ${code}`);
+          console.error(`stderr output: ${stderrData}`);
+          console.error(`stdout output: ${stdoutData}`);
           return resolve(
             NextResponse.json(
-              { error: "Pipeline processing failed", details: stderrData },
+              { error: "Pipeline processing failed", details: stderrData, stdout: stdoutData },
               { status: 500 }
             )
           );
@@ -90,6 +95,7 @@ export async function POST(request: NextRequest) {
         try {
           // Parse the strict JSON output expected from main.py
           const result = JSON.parse(stdoutData.trim());
+          console.log(`Pipeline succeeded: Generated 3D models and takeoff`);
           return resolve(NextResponse.json(result, { status: 200 }));
         } catch (e: any) {
           console.error("Failed to parse pipeline output:", e.message);
