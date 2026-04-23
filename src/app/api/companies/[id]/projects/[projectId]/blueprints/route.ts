@@ -49,6 +49,14 @@ function parseJsonFromMixedOutput(output: string): any {
   }
 }
 
+function toErrorMessage(err: unknown): string {
+  if (!err || typeof err !== 'object') return String(err);
+  const maybe = err as { message?: string; stdout?: string; stderr?: string; code?: string };
+  const parts = [maybe.message, maybe.stderr, maybe.stdout].filter(Boolean) as string[];
+  const joined = parts.join(' | ').trim();
+  return joined || 'Unknown pipeline error';
+}
+
 function canExecutePython(command: string, useVersionFlag = false): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     const args = useVersionFlag ? ['--version'] : ['-c', 'import sys; print(sys.version)'];
@@ -150,53 +158,70 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
            });
           blueprintData = parseJsonFromMixedOutput(output);
        } catch (err: any) {
-           console.error('Python ingestion failed:', err.code === 'ETIMEDOUT' ? 'Timeout (120s) - file too complex' : err.stdout || err.message);
-           // if python fails we'll still save the file, but without extracted blueprintData
+           const detail = err?.code === 'ETIMEDOUT'
+             ? 'Timeout (120s) - file too complex'
+             : toErrorMessage(err);
+           throw new Error(`PIPELINE_STAGE_INGESTION_FAILED: ${detail}`);
+       }
+
+       if (!blueprintData || blueprintData.status !== 'success' || !blueprintData.data) {
+         throw new Error('PIPELINE_STAGE_INGESTION_FAILED: ingestion did not return success payload');
        }
 
        let geometryData: any = null;
        let model3DData: any = null;
-       if (blueprintData && blueprintData.status === 'success') {
-           const geomScript = join(process.cwd(), 'scripts', 'extract_geometry.py');
-           try {
-               const geomOutput = execFileSync(pythonExe, [geomScript], {
-                   input: JSON.stringify({ 
-                       ...blueprintData.data, 
-                       companyId: id,
-                       manualScale: item.manualScale || undefined,
-                       settings: item.settings || {}
-                   }),
-                   encoding: 'utf-8',
-                   maxBuffer: 50 * 1024 * 1024,
-                   timeout: 120000 // 120 second timeout for geometry detection
-               });
-              geometryData = parseJsonFromMixedOutput(geomOutput);
+       const geomScript = join(process.cwd(), 'scripts', 'extract_geometry.py');
+       try {
+         const geomOutput = execFileSync(pythonExe, [geomScript], {
+           input: JSON.stringify({
+             ...blueprintData.data,
+             companyId: id,
+             manualScale: item.manualScale || undefined,
+             settings: item.settings || {},
+           }),
+           encoding: 'utf-8',
+           maxBuffer: 50 * 1024 * 1024,
+           timeout: 120000, // 120 second timeout for geometry detection
+         });
+         geometryData = parseJsonFromMixedOutput(geomOutput);
+       } catch (err: any) {
+         const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (120s)' : toErrorMessage(err);
+         throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: ${detail}`);
+       }
 
-               // Generate 3D Reconstruction
-               const model3DScript = join(process.cwd(), 'scripts', 'generate_3d.py');
-               const model3DOutput = execFileSync(pythonExe, [model3DScript], {
-                   input: JSON.stringify({ 
-                       walls: geometryData.walls || [],
-                       rooms: geometryData.rooms || [],
-                       notes: blueprintData.data.notes || [],
-                       text: blueprintData.data.text || [],
-                       settings: {
-                           ...(item.settings || {}),
-                           ...geometryData.settingsUsed
-                       }
-                   }),
-                   env: { ...process.env },
-                   encoding: 'utf-8',
-                   maxBuffer: 50 * 1024 * 1024,
-                   stdio: ['pipe', 'pipe', 'pipe'],
-                   timeout: 180000 // 180 second timeout for 3D reconstruction (needs more time for AI calls)
-               });
+       if (!geometryData || geometryData.error || !Array.isArray(geometryData.walls) || !Array.isArray(geometryData.rooms)) {
+         throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: invalid geometry payload (${JSON.stringify(geometryData?.error || geometryData)})`);
+       }
 
-               console.log('3D Generation Output (first 100 chars):', model3DOutput.substring(0, 100));
-              model3DData = parseJsonFromMixedOutput(model3DOutput);
-           } catch (err: any) {
-               console.error('Python calculation failed:', err.code === 'ETIMEDOUT' ? `Timeout - ${err.message}` : err.stderr || err.stdout || err.message);
-           }
+       // Generate 3D Reconstruction
+       const model3DScript = join(process.cwd(), 'scripts', 'generate_3d.py');
+       try {
+         const model3DOutput = execFileSync(pythonExe, [model3DScript], {
+           input: JSON.stringify({
+             walls: geometryData.walls || [],
+             rooms: geometryData.rooms || [],
+             notes: blueprintData.data.notes || [],
+             text: blueprintData.data.text || [],
+             settings: {
+               ...(item.settings || {}),
+               ...geometryData.settingsUsed,
+             },
+           }),
+           env: { ...process.env },
+           encoding: 'utf-8',
+           maxBuffer: 50 * 1024 * 1024,
+           stdio: ['pipe', 'pipe', 'pipe'],
+           timeout: 180000, // 180 second timeout for 3D reconstruction
+         });
+
+         model3DData = parseJsonFromMixedOutput(model3DOutput);
+       } catch (err: any) {
+         const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (180s)' : toErrorMessage(err);
+         throw new Error(`PIPELINE_STAGE_3D_FAILED: ${detail}`);
+       }
+
+       if (!model3DData || model3DData.error || model3DData.status !== 'success' || !model3DData.takeoff) {
+         throw new Error(`PIPELINE_STAGE_3D_FAILED: invalid reconstruction payload (${JSON.stringify(model3DData?.error || model3DData)})`);
        }
 
        if (isTemp) {
@@ -251,28 +276,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 mimeType,
                 fileHash,
                 notes,
-                ...(blueprintData && blueprintData.status === 'success' ? {
-                  blueprintData: {
-                    create: {
-                      lines: JSON.stringify(blueprintData.data.lines || []),
-                      paths: JSON.stringify(blueprintData.data.paths || []),
-                      text: JSON.stringify(blueprintData.data.text || []),
-                      dimensions: JSON.stringify(blueprintData.data.dimensions || []),
-                      notes: JSON.stringify(blueprintData.data.notes || []),
-                      annotations: JSON.stringify(blueprintData.data.annotations || [])
-                    }
-                  }
-                } : {}),
-                ...(geometryData ? {
-                  geometryData: {
-                    create: {
-                      walls: JSON.stringify(geometryData.walls || []),
-                      rooms: JSON.stringify(geometryData.rooms || []),
-                      openings: JSON.stringify(geometryData.openings || []),
-                      zones: JSON.stringify(geometryData.zones || [])
-                    }
-                  }
-                } : {}),
+                blueprintData: {
+                  create: {
+                    lines: JSON.stringify(blueprintData.data.lines || []),
+                    paths: JSON.stringify(blueprintData.data.paths || []),
+                    text: JSON.stringify(blueprintData.data.text || []),
+                    dimensions: JSON.stringify(blueprintData.data.dimensions || []),
+                    notes: JSON.stringify(blueprintData.data.notes || []),
+                    annotations: JSON.stringify(blueprintData.data.annotations || []),
+                  },
+                },
+                geometryData: {
+                  create: {
+                    walls: JSON.stringify(geometryData.walls || []),
+                    rooms: JSON.stringify(geometryData.rooms || []),
+                    openings: JSON.stringify(geometryData.openings || []),
+                    zones: JSON.stringify(geometryData.zones || []),
+                  },
+                },
                 ...((objUrl || stepUrl || usdUrl) ? {
                   blueprint3DModel: {
                     create: {
@@ -282,20 +303,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     }
                   }
                 } : {}),
-                ...(model3DData && model3DData.takeoff ? {
-                  takeoffResult: {
-                    create: {
-                      wallSurfaceArea: model3DData.takeoff.wallSurfaceArea,
-                      floorCeilingArea: model3DData.takeoff.floorCeilingArea,
-                      volume: model3DData.takeoff.volume,
-                      drywallPanels: model3DData.takeoff.drywallPanels,
-                      studs: model3DData.takeoff.studs,
-                      paintGallons: model3DData.takeoff.paintGallons,
-                      wasteFactor: model3DData.takeoff.wasteFactor,
-                      insulationData: model3DData.takeoff.insulation ? JSON.stringify(model3DData.takeoff.insulation) : null
-                    }
-                  }
-                } : {})
+                takeoffResult: {
+                  create: {
+                    wallSurfaceArea: model3DData.takeoff.wallSurfaceArea,
+                    floorCeilingArea: model3DData.takeoff.floorCeilingArea,
+                    volume: model3DData.takeoff.volume,
+                    drywallPanels: model3DData.takeoff.drywallPanels,
+                    studs: model3DData.takeoff.studs,
+                    paintGallons: model3DData.takeoff.paintGallons,
+                    wasteFactor: model3DData.takeoff.wasteFactor,
+                    insulationData: model3DData.takeoff.insulation ? JSON.stringify(model3DData.takeoff.insulation) : null,
+                  },
+                },
               }
             }
           },
