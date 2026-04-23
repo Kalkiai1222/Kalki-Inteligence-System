@@ -26,23 +26,28 @@ COPY prisma ./prisma/
 RUN npm ci
 RUN npx prisma generate
 
-# Rebuild the source code only when needed
-FROM base AS builder
+# Build Python environment in its own cacheable layer
+FROM base AS pydeps
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-
-# Next.js telemetry is disabled
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Run Next.js build first (memory intensive)
-RUN npm run build
-
-# Then set up Python virtual environment (disk intensive)
+COPY requirements.txt ./
 RUN python3 -m venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"
 RUN /app/.venv/bin/pip install --upgrade pip setuptools wheel
 RUN /app/.venv/bin/pip install -r requirements.txt
+
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=pydeps /app/.venv /app/.venv
+COPY . .
+
+# Next.js telemetry is disabled
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Run Next.js build first (memory intensive)
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

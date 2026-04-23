@@ -181,7 +181,8 @@ def extract_geometry(data, company_id=None) -> GeometryData:
             room_features_text.append(signature)
             
     # Try querying FAISS elastic memory if available
-    if company_id and room_features_text:
+    classification_enabled = bool(data.get("settings", {}).get("enableSemanticClassification", False))
+    if company_id and room_features_text and classification_enabled:
         try:
             # We import here to avoid circular dependencies and load overhead if not needed
             script_dir = os.path.dirname(__file__)

@@ -5,6 +5,8 @@ import path from "path";
 import os from "os";
 import { access } from "fs/promises";
 
+const PIPELINE_TIMEOUT_MS = Number(process.env.PIPELINE_TOTAL_TIMEOUT_MS || 420000);
+
 async function canExecutePython(command: string, useVersionFlag = false): Promise<boolean> {
   return await new Promise<boolean>((resolve) => {
     const args = useVersionFlag ? ["--version"] : ["-c", "import sys; print(sys.version)"];
@@ -101,12 +103,12 @@ export async function POST(request: NextRequest) {
       let stderrData = "";
       let processCompleted = false;
 
-      // Add 120 second timeout
+      // Configurable total timeout for full pipeline
       const timeout = setTimeout(() => {
         if (!processCompleted) {
           processCompleted = true;
           pyProcess.kill();
-          console.error("Python pipeline timeout after 120s");
+          console.error(`Python pipeline timeout after ${PIPELINE_TIMEOUT_MS}ms`);
           resolve(
             NextResponse.json(
               { error: "Blueprint processing timeout - file may be too large" },
@@ -114,7 +116,7 @@ export async function POST(request: NextRequest) {
             )
           );
         }
-      }, 120000);
+      }, PIPELINE_TIMEOUT_MS);
 
       pyProcess.stdout.on("data", (data) => {
         stdoutData += data.toString();

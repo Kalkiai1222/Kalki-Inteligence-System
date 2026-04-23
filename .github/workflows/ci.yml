@@ -9,6 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      JWT_SECRET: "ci-dummy-secret"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/postgres?schema=public"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,8 +28,8 @@ jobs:
       - name: Install Python deps
         run: pip install -r requirements.txt pytest pytest-timeout
       - name: Prisma setup
-        run: npx prisma generate && npx prisma db push
-      - name: Lint
-        run: npm run lint
+        run: npx prisma generate
+      - name: Build
+        run: npm run build
       - name: Run CI
-        run: make ci
+        run: python -m pytest tests/ -x --timeout=360

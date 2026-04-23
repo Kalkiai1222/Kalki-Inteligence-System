@@ -10,6 +10,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import os from 'os';
 
+const INGESTION_TIMEOUT_MS = Number(process.env.PIPELINE_INGESTION_TIMEOUT_MS || 180000);
+const GEOMETRY_TIMEOUT_MS = Number(process.env.PIPELINE_GEOMETRY_TIMEOUT_MS || 300000);
+const RECONSTRUCTION_TIMEOUT_MS = Number(process.env.PIPELINE_3D_TIMEOUT_MS || 300000);
+
 function sha256File(path: string): string {
   const content = readFileSync(path);
   return createHash('sha256').update(content).digest('hex');
@@ -154,7 +158,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                encoding: 'utf-8', 
                maxBuffer: 50 * 1024 * 1024,
                stdio: ['ignore', 'pipe', 'pipe'],
-               timeout: 120000 // 120 second timeout for ingestion
+               timeout: INGESTION_TIMEOUT_MS,
            });
           blueprintData = parseJsonFromMixedOutput(output);
        } catch (err: any) {
@@ -177,11 +181,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
              ...blueprintData.data,
              companyId: id,
              manualScale: item.manualScale || undefined,
-             settings: item.settings || {},
+             settings: {
+               ...(item.settings || {}),
+               // Classification can be expensive and is non-critical for geometry extraction.
+               enableSemanticClassification: item.settings?.enableSemanticClassification ?? false,
+             },
            }),
            encoding: 'utf-8',
            maxBuffer: 50 * 1024 * 1024,
-           timeout: 120000, // 120 second timeout for geometry detection
+           timeout: GEOMETRY_TIMEOUT_MS,
          });
          geometryData = parseJsonFromMixedOutput(geomOutput);
        } catch (err: any) {
@@ -211,7 +219,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
            encoding: 'utf-8',
            maxBuffer: 50 * 1024 * 1024,
            stdio: ['pipe', 'pipe', 'pipe'],
-           timeout: 180000, // 180 second timeout for 3D reconstruction
+           timeout: RECONSTRUCTION_TIMEOUT_MS,
          });
 
          model3DData = parseJsonFromMixedOutput(model3DOutput);
