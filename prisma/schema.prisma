@@ -9,7 +9,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -151,6 +151,9 @@ model Blueprint3DModel {
   objUrl             String?
   stepUrl            String?
   usdUrl             String?
+  objData            String?  // OBJ file content stored in DB (ephemeral FS safe)
+  stepData           String?  // STEP file content stored in DB
+  usdData            String?  // USDA file content stored in DB
   createdAt          DateTime @default(now())
 
   blueprintVersion   BlueprintVersion @relation(fields: [blueprintVersionId], references: [id], onDelete: Cascade)

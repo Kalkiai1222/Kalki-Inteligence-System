@@ -267,38 +267,11 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
       return NextResponse.json({ error: 'Mesh quality failed', report: model3DData.quality_report }, { status: 422 });
     }
 
-    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'models');
-    await mkdir(uploadsDir, { recursive: true });
-
-    const fileHash = version.fileHash || version.id;
-    let objUrl: string | null = null;
-    let stepUrl: string | null = null;
-    let usdUrl: string | null = null;
-    let objPath: string | null = null;
-    let stepPath: string | null = null;
-    let usdPath: string | null = null;
-
-    if (model3DData?.status === 'success') {
-      if (model3DData.obj) {
-        const objName = `${fileHash}-model.obj`;
-        objPath = join(uploadsDir, objName);
-        await writeFile(objPath, model3DData.obj, 'utf-8');
-        objUrl = `/uploads/models/${objName}`;
-      }
-      if (model3DData.step) {
-        const stepName = `${fileHash}-model.step`;
-        stepPath = join(uploadsDir, stepName);
-        await writeFile(stepPath, model3DData.step, 'utf-8');
-        if (!stepPath.toLowerCase().endsWith('.step')) throw new Error('STEP export must use .step extension');
-        stepUrl = `/uploads/models/${stepName}`;
-      }
-      if (model3DData.usd) {
-        const usdName = `${fileHash}-model.usda`;
-        usdPath = join(uploadsDir, usdName);
-        await writeFile(usdPath, model3DData.usd, 'utf-8');
-        usdUrl = `/uploads/models/${usdName}`;
-      }
-    }
+    // Store derived model content directly in the database
+    // (Render uses an ephemeral filesystem — files in public/uploads are lost on deploy)
+    const hasObj = !!(model3DData?.status === 'success' && model3DData.obj);
+    const hasStep = !!(model3DData?.status === 'success' && model3DData.step);
+    const hasUsd = !!(model3DData?.status === 'success' && model3DData.usd);
 
     await prisma.blueprintGeometry.upsert({
       where: { blueprintVersionId: versionId },
@@ -391,11 +364,37 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
       }
     }
 
-    if (objUrl || stepUrl || usdUrl) {
-      await prisma.blueprint3DModel.upsert({
+    let created3DModel = null;
+    if (hasObj || hasStep || hasUsd) {
+      created3DModel = await prisma.blueprint3DModel.upsert({
         where: { blueprintVersionId: versionId },
-        update: { objUrl, stepUrl, usdUrl },
-        create: { blueprintVersionId: versionId, objUrl, stepUrl, usdUrl },
+        update: { 
+          objUrl: hasObj ? 'pending' : null,
+          stepUrl: hasStep ? 'pending' : null,
+          usdUrl: hasUsd ? 'pending' : null,
+          objData: hasObj ? model3DData.obj : null,
+          stepData: hasStep ? model3DData.step : null,
+          usdData: hasUsd ? model3DData.usd : null,
+        },
+        create: { 
+          blueprintVersionId: versionId, 
+          objUrl: hasObj ? 'pending' : null,
+          stepUrl: hasStep ? 'pending' : null,
+          usdUrl: hasUsd ? 'pending' : null,
+          objData: hasObj ? model3DData.obj : null,
+          stepData: hasStep ? model3DData.step : null,
+          usdData: hasUsd ? model3DData.usd : null,
+        },
+      });
+
+      // Update URLs to use the API route
+      await prisma.blueprint3DModel.update({
+        where: { id: created3DModel.id },
+        data: {
+          objUrl: hasObj ? `/api/models/${created3DModel.id}/obj` : null,
+          stepUrl: hasStep ? `/api/models/${created3DModel.id}/step` : null,
+          usdUrl: hasUsd ? `/api/models/${created3DModel.id}/usd` : null,
+        },
       });
     }
 
@@ -419,13 +418,15 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
           { jobId: existingJob.id, status: model3DData?.quality_report?.passed === false ? 'failed' : 'validated' },
         ],
       });
-      if (objPath && objUrl) {
+
+      if (hasObj && created3DModel) {
+        const objContent = model3DData.obj;
         await prisma.exportArtifact.upsert({
           where: { id: `${existingJob.id}-obj` },
           update: {
-            filePath: objPath,
-            fileSizeBytes: readFileSync(objPath).byteLength,
-            sha256Hash: hashFile(objPath),
+            filePath: `/api/models/${created3DModel.id}/obj`,
+            fileSizeBytes: Buffer.byteLength(objContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(objContent).digest('hex'),
             isValid: true,
             validationError: null,
           },
@@ -434,61 +435,63 @@ export async function POST(req: Request, { params }: { params: RouteParams }) {
             jobId: existingJob.id,
             blueprintVersionId: versionId,
             artifactType: 'obj',
-            filePath: objPath,
-            fileSizeBytes: readFileSync(objPath).byteLength,
-            sha256Hash: hashFile(objPath),
+            filePath: `/api/models/${created3DModel.id}/obj`,
+            fileSizeBytes: Buffer.byteLength(objContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(objContent).digest('hex'),
             isValid: true,
           },
         });
       }
-      if (stepPath && stepUrl) {
+      if (hasStep && created3DModel) {
+        const stepContent = model3DData.step;
+        const isValidStep = stepContent.includes('ISO-10303');
         await prisma.exportArtifact.upsert({
           where: { id: `${existingJob.id}-step` },
           update: {
-            filePath: stepPath,
-            fileSizeBytes: readFileSync(stepPath).byteLength,
-            sha256Hash: hashFile(stepPath),
-            isValid: readFileSync(stepPath, 'utf-8').includes('ISO-10303'),
-            validationError: readFileSync(stepPath, 'utf-8').includes('ISO-10303') ? null : 'STEP header missing ISO-10303 signature',
+            filePath: `/api/models/${created3DModel.id}/step`,
+            fileSizeBytes: Buffer.byteLength(stepContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(stepContent).digest('hex'),
+            isValid: isValidStep,
+            validationError: isValidStep ? null : 'STEP header missing ISO-10303 signature',
           },
           create: {
             id: `${existingJob.id}-step`,
             jobId: existingJob.id,
             blueprintVersionId: versionId,
             artifactType: 'step',
-            filePath: stepPath,
-            fileSizeBytes: readFileSync(stepPath).byteLength,
-            sha256Hash: hashFile(stepPath),
-            isValid: readFileSync(stepPath, 'utf-8').includes('ISO-10303'),
-            validationError: readFileSync(stepPath, 'utf-8').includes('ISO-10303') ? null : 'STEP header missing ISO-10303 signature',
+            filePath: `/api/models/${created3DModel.id}/step`,
+            fileSizeBytes: Buffer.byteLength(stepContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(stepContent).digest('hex'),
+            isValid: isValidStep,
+            validationError: isValidStep ? null : 'STEP header missing ISO-10303 signature',
           },
         });
       }
-      if (usdPath && usdUrl) {
-        const usdRaw = readFileSync(usdPath, 'utf-8');
+      if (hasUsd && created3DModel) {
+        const usdContent = model3DData.usd;
+        const isValidUsd = usdContent.includes('#usda') || usdContent.includes('def Mesh');
         await prisma.exportArtifact.upsert({
           where: { id: `${existingJob.id}-usd` },
           update: {
-            filePath: usdPath,
-            fileSizeBytes: readFileSync(usdPath).byteLength,
-            sha256Hash: hashFile(usdPath),
-            isValid: usdRaw.includes('#usda') || usdRaw.includes('def Mesh'),
-            validationError: usdRaw.includes('#usda') || usdRaw.includes('def Mesh') ? null : 'USD validation failed',
+            filePath: `/api/models/${created3DModel.id}/usd`,
+            fileSizeBytes: Buffer.byteLength(usdContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(usdContent).digest('hex'),
+            isValid: isValidUsd,
+            validationError: isValidUsd ? null : 'USD validation failed',
           },
           create: {
             id: `${existingJob.id}-usd`,
             jobId: existingJob.id,
             blueprintVersionId: versionId,
             artifactType: 'usd',
-            filePath: usdPath,
-            fileSizeBytes: readFileSync(usdPath).byteLength,
-            sha256Hash: hashFile(usdPath),
-            isValid: usdRaw.includes('#usda') || usdRaw.includes('def Mesh'),
-            validationError: usdRaw.includes('#usda') || usdRaw.includes('def Mesh') ? null : 'USD validation failed',
+            filePath: `/api/models/${created3DModel.id}/usd`,
+            fileSizeBytes: Buffer.byteLength(usdContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(usdContent).digest('hex'),
+            isValid: isValidUsd,
+            validationError: isValidUsd ? null : 'USD validation failed',
           },
         });
       }
-    }
 
     const scaleResult = detectScale({
       manualScale,

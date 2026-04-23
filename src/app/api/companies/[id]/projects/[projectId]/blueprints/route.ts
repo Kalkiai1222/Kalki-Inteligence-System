@@ -236,39 +236,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           try { await unlink(localPath); } catch (e) {}
        }
 
-       // Store derived artifacts locally with deterministic names.
-       let objUrl = null;
-       let stepUrl = null;
-       let usdUrl = null;
-       let objPath: string | null = null;
-       let stepPath: string | null = null;
-       let usdPath: string | null = null;
-
-       if (model3DData && model3DData.status === 'success') {
-          const uploadsDir = join(process.cwd(), 'public', 'uploads', 'models');
-          try { await mkdir(uploadsDir, { recursive: true }); } catch(e) {}
-          
-          if (model3DData.obj) {
-            const objFilename = `${fileHash}-model.obj`;
-            objPath = join(uploadsDir, objFilename);
-            await writeFile(objPath, model3DData.obj);
-            objUrl = `/uploads/models/${objFilename}`;
-          }
-
-          if (model3DData.step) {
-            const stepFilename = `${fileHash}-model.step`;
-            stepPath = join(uploadsDir, stepFilename);
-            await writeFile(stepPath, model3DData.step);
-            stepUrl = `/uploads/models/${stepFilename}`;
-          }
-
-          if (model3DData.usd) {
-            const usdFilename = `${fileHash}-model.usda`;
-            usdPath = join(uploadsDir, usdFilename);
-            await writeFile(usdPath, model3DData.usd);
-            usdUrl = `/uploads/models/${usdFilename}`;
-          }
-       }
+       // Store derived model content directly in the database
+       // (Render uses an ephemeral filesystem — files in public/uploads are lost on deploy)
+       const hasObj = !!(model3DData && model3DData.status === 'success' && model3DData.obj);
+       const hasStep = !!(model3DData && model3DData.status === 'success' && model3DData.step);
+       const hasUsd = !!(model3DData && model3DData.status === 'success' && model3DData.usd);
 
        // Now store to DB
        const blueprintSet = await prisma.blueprintSet.create({
@@ -302,12 +274,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     zones: JSON.stringify(geometryData.zones || []),
                   },
                 },
-                ...((objUrl || stepUrl || usdUrl) ? {
+                ...((hasObj || hasStep || hasUsd) ? {
                   blueprint3DModel: {
                     create: {
-                      objUrl,
-                      stepUrl,
-                      usdUrl
+                      // URLs will be updated after creation to include the model ID
+                      objUrl: hasObj ? 'pending' : null,
+                      stepUrl: hasStep ? 'pending' : null,
+                      usdUrl: hasUsd ? 'pending' : null,
+                      objData: hasObj ? model3DData.obj : null,
+                      stepData: hasStep ? model3DData.step : null,
+                      usdData: hasUsd ? model3DData.usd : null,
                     }
                   }
                 } : {}),
@@ -328,6 +304,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           },
           include: { versions: { include: { blueprintData: true, geometryData: true, blueprint3DModel: true, takeoffResult: true } } }
        });
+
+       // Update the 3D model URLs to point to the API serving route
+       const created3DModel = blueprintSet.versions[0]?.blueprint3DModel;
+       if (created3DModel) {
+         await prisma.blueprint3DModel.update({
+           where: { id: created3DModel.id },
+           data: {
+             objUrl: hasObj ? `/api/models/${created3DModel.id}/obj` : null,
+             stepUrl: hasStep ? `/api/models/${created3DModel.id}/step` : null,
+             usdUrl: hasUsd ? `/api/models/${created3DModel.id}/usd` : null,
+           },
+         });
+         // Refresh the blueprint set data so the response includes correct URLs
+         blueprintSet.versions[0].blueprint3DModel!.objUrl = hasObj ? `/api/models/${created3DModel.id}/obj` : null;
+         blueprintSet.versions[0].blueprint3DModel!.stepUrl = hasStep ? `/api/models/${created3DModel.id}/step` : null;
+         blueprintSet.versions[0].blueprint3DModel!.usdUrl = hasUsd ? `/api/models/${created3DModel.id}/usd` : null;
+       }
        const createdVersion = blueprintSet.versions[0];
 
        if (model3DData?.takeoff?.perWallDetails && Array.isArray(model3DData.takeoff.perWallDetails)) {
@@ -373,46 +366,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         ],
        });
 
-       if (objPath && objUrl) {
+       if (hasObj && created3DModel) {
         const validation = validateObjContent(model3DData?.obj || '');
+        const objContent = model3DData?.obj || '';
         await prisma.exportArtifact.create({
           data: {
             jobId: job.id,
             blueprintVersionId: createdVersion.id,
             artifactType: 'obj',
-            filePath: objPath,
-            fileSizeBytes: existsSync(objPath) ? readFileSync(objPath).byteLength : 0,
-            sha256Hash: sha256File(objPath),
+            filePath: `/api/models/${created3DModel.id}/obj`,
+            fileSizeBytes: Buffer.byteLength(objContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(objContent).digest('hex'),
             isValid: validation.isValid,
             validationError: validation.error,
           },
         });
        }
-       if (stepPath && stepUrl) {
-        const validation = validateStepPath(stepPath);
+       if (hasStep && created3DModel) {
+        const stepContent = model3DData?.step || '';
+        const validation = validateStepPath ? { isValid: stepContent.includes('ISO-10303'), error: stepContent.includes('ISO-10303') ? null : 'STEP header missing ISO-10303 signature' } : { isValid: true, error: null };
         await prisma.exportArtifact.create({
           data: {
             jobId: job.id,
             blueprintVersionId: createdVersion.id,
             artifactType: 'step',
-            filePath: stepPath,
-            fileSizeBytes: existsSync(stepPath) ? readFileSync(stepPath).byteLength : 0,
-            sha256Hash: sha256File(stepPath),
+            filePath: `/api/models/${created3DModel.id}/step`,
+            fileSizeBytes: Buffer.byteLength(stepContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(stepContent).digest('hex'),
             isValid: validation.isValid,
             validationError: validation.error,
           },
         });
        }
-       if (usdPath && usdUrl) {
+       if (hasUsd && created3DModel) {
         const validation = validateUsdContent(model3DData?.usd || '');
+        const usdContent = model3DData?.usd || '';
         await prisma.exportArtifact.create({
           data: {
             jobId: job.id,
             blueprintVersionId: createdVersion.id,
             artifactType: 'usd',
-            filePath: usdPath,
-            fileSizeBytes: existsSync(usdPath) ? readFileSync(usdPath).byteLength : 0,
-            sha256Hash: sha256File(usdPath),
+            filePath: `/api/models/${created3DModel.id}/usd`,
+            fileSizeBytes: Buffer.byteLength(usdContent, 'utf-8'),
+            sha256Hash: createHash('sha256').update(usdContent).digest('hex'),
             isValid: validation.isValid,
             validationError: validation.error,
           },
