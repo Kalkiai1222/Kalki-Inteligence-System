@@ -32,15 +32,15 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ modelId: string; fileType: string }> }
 ) {
-  const { modelId, fileType } = await params;
-
-  // Validate fileType early before hitting the DB
-  const fileTypeDef = FILE_TYPE_MAP[fileType as keyof typeof FILE_TYPE_MAP];
-  if (!fileTypeDef) {
-    return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
-  }
-
   try {
+    const { modelId, fileType } = await params;
+
+    // Validate fileType early before hitting the DB
+    const fileTypeDef = FILE_TYPE_MAP[fileType as keyof typeof FILE_TYPE_MAP];
+    if (!fileTypeDef) {
+      return NextResponse.json({ error: 'Invalid file type' }, { status: 400 });
+    }
+
     const model = await prisma.blueprint3DModel.findUnique({
       where: { id: modelId },
       select: { [fileTypeDef.field]: true },
@@ -86,7 +86,8 @@ export async function GET(
   } catch (err: unknown) {
     console.error(
       'Model serve error:',
-      err instanceof Error ? err.message : err
+      err instanceof Error ? err.message : err,
+      err instanceof Error ? err.stack : ''
     );
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
