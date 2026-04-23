@@ -58,8 +58,24 @@ export async function GET(
       );
     }
 
+    // Validate that fileUrl is an absolute URL (not a relative path)
+    let absoluteUrl: string;
+    try {
+      absoluteUrl = new URL(fileUrl).toString();
+    } catch {
+      // If fileUrl is not a valid absolute URL, it's likely a relative path
+      // This indicates a data integrity issue in the database
+      console.error(
+        `Invalid file URL for modelId=${modelId} fileType=${fileType}: "${fileUrl}" is not an absolute URL`
+      );
+      return NextResponse.json(
+        { error: 'File URL is misconfigured' },
+        { status: 500 }
+      );
+    }
+
     // Proxy the file from the upstream URL (e.g. S3, GCS, etc.)
-    const upstream = await fetch(fileUrl);
+    const upstream = await fetch(absoluteUrl);
     if (!upstream.ok) {
       console.error(
         `Upstream fetch failed for modelId=${modelId} fileType=${fileType}: ${upstream.status} ${upstream.statusText}`
@@ -70,11 +86,23 @@ export async function GET(
       );
     }
 
+    // Ensure we have a body to send
+    const buffer = await upstream.arrayBuffer();
+    if (buffer.byteLength === 0) {
+      console.error(
+        `Empty response body for modelId=${modelId} fileType=${fileType}`
+      );
+      return NextResponse.json(
+        { error: 'File content is empty' },
+        { status: 502 }
+      );
+    }
+
     // Sanitize modelId to prevent Content-Disposition header injection
     const safeId = modelId.replace(/[^a-zA-Z0-9_-]/g, '_');
     const filename = `${safeId}.${fileTypeDef.ext}`;
 
-    return new Response(upstream.body, {
+    return new Response(buffer, {
       status: 200,
       headers: {
         'Content-Type': fileTypeDef.contentType,
