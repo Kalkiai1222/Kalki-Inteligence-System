@@ -19,6 +19,8 @@ MIN_IMAGE_DIM = 300               # skip images smaller than this (logos, icons)
 PAGE_TIME_BUDGET_SEC = 60         # skip remaining images on a page after this
 MAX_IMAGES_PER_PAGE = 12          # skip excess images on extremely dense pages
 MAX_VECTOR_DRAWINGS_PER_PAGE = 50000  # skip vector extraction if page is insanely dense
+MAX_LINES_PER_PAGE = 15000        # limit raw 'l' lines to prevent JSON bloat
+MAX_TOTAL_LINES = 75000           # limit total lines across entire document
 
 # ──────────────────────────────────────────────────────────────────────
 # LOGGING
@@ -56,7 +58,7 @@ def extract_from_image(cv_img, page_num):
 # ──────────────────────────────────────────────────────────────────────
 # PAGE-LEVEL PROCESSOR  (streaming — one page at a time, then free)
 # ──────────────────────────────────────────────────────────────────────
-def _process_pdf_page(doc, page_num, total_pages):
+def _process_pdf_page(doc, page_num, total_pages, global_line_count):
     """
     Process a single PDF page. Returns (lines, paths, text, dimensions,
     notes, annotations) for that page.  Never raises — returns partial
@@ -89,14 +91,20 @@ def _process_pdf_page(doc, page_num, total_pages):
             drawings = drawings[:MAX_VECTOR_DRAWINGS_PER_PAGE]
 
         for d in drawings:
+            # Stop if we've hit per-page or global limits
+            if len(page_lines) >= MAX_LINES_PER_PAGE or global_line_count >= MAX_TOTAL_LINES:
+                break
+                
             try:
                 for item in d["items"]:
                     if item[0] == "l":
-                        page_lines.append({
-                            "p1": [item[1].x, item[1].y],
-                            "p2": [item[2].x, item[2].y],
-                            "page": page_num
-                        })
+                        if len(page_lines) < MAX_LINES_PER_PAGE and global_line_count < MAX_TOTAL_LINES:
+                            page_lines.append({
+                                "p1": [item[1].x, item[1].y],
+                                "p2": [item[2].x, item[2].y],
+                                "page": page_num
+                            })
+                            global_line_count += 1
                     elif item[0] in ("re", "qu", "c"):
                         page_paths.append({
                             "type": item[0],
@@ -262,12 +270,12 @@ def _process_pdf_page(doc, page_num, total_pages):
     elapsed = time.monotonic() - page_start
     logger.info(
         f'END_PAGE {page_num + 1}/{total_pages} '
-        f'lines={len(page_lines)} paths={len(page_paths)} text={len(page_text)} '
+        f'lines={len(page_lines)} (global={global_line_count}) paths={len(page_paths)} text={len(page_text)} '
         f'dims={len(page_dimensions)} notes={len(page_notes)} annots={len(page_annotations)} '
         f'elapsed={elapsed:.2f}s'
     )
 
-    return page_lines, page_paths, page_text, page_dimensions, page_notes, page_annotations
+    return page_lines, page_paths, page_text, page_dimensions, page_notes, page_annotations, global_line_count
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -329,10 +337,11 @@ def process_file(file_path):
             raise RuntimeError(f"Failed to open PDF file: {str(e)}")
 
         total_pages = len(doc)
+        global_line_count = 0
         try:
             for page_num in range(total_pages):
                 try:
-                    pl, pp, pt, pd, pn, pa = _process_pdf_page(doc, page_num, total_pages)
+                    pl, pp, pt, pd, pn, pa, global_line_count = _process_pdf_page(doc, page_num, total_pages, global_line_count)
                     lines.extend(pl)
                     paths.extend(pp)
                     text.extend(pt)
