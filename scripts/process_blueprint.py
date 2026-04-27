@@ -12,15 +12,15 @@ import logging
 # ──────────────────────────────────────────────────────────────────────
 # CONFIGURATION — tune these for your container's RAM / CPU budget
 # ──────────────────────────────────────────────────────────────────────
-MAX_PATHS_PER_IMAGE = 500         # tight cap per image
-MAX_TOTAL_PATHS_PER_PAGE = 2000   # tight cap across ALL images on one page
-MAX_IMAGE_DIM = 1000              # aggressively downscale any axis beyond this
+MAX_PATHS_PER_IMAGE = 200         # tight cap per image
+MAX_TOTAL_PATHS_PER_PAGE = 500    # tight cap across ALL images on one page
+MAX_IMAGE_DIM = 500               # aggressively downscale any axis beyond this
 MIN_IMAGE_DIM = 400               # skip images smaller than this (logos, icons)
-PAGE_TIME_BUDGET_SEC = 30         # skip remaining images on a page after this
-MAX_IMAGES_PER_PAGE = 8           # skip excess images on extremely dense pages
-MAX_VECTOR_DRAWINGS_PER_PAGE = 20000  # skip vector extraction if page is insanely dense
-MAX_LINES_PER_PAGE = 3000         # strict limit raw 'l' lines to prevent JSON bloat
-MAX_TOTAL_LINES = 20000           # strict limit total lines across entire document
+PAGE_TIME_BUDGET_SEC = 20         # skip remaining images on a page after this
+MAX_IMAGES_PER_PAGE = 4           # skip excess images on extremely dense pages
+MAX_VECTOR_DRAWINGS_PER_PAGE = 5000  # skip vector extraction if page is insanely dense
+MAX_LINES_PER_PAGE = 500          # strict limit raw 'l' lines to prevent JSON bloat
+MAX_TOTAL_LINES = 3000            # strict limit total lines across entire document
 
 # ──────────────────────────────────────────────────────────────────────
 # LOGGING
