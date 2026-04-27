@@ -84,7 +84,9 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy and fix the startup script (ensures LF line endings)
 COPY scripts/start.sh /app/start.sh
-RUN chmod +x /app/start.sh && dos2unix /app/start.sh 2>/dev/null || sed -i 's/\r$//' /app/start.sh
+RUN sed -i '1s/^\xEF\xBB\xBF//' /app/start.sh && \
+    chmod +x /app/start.sh && \
+    (dos2unix /app/start.sh 2>/dev/null || sed -i 's/\r$//' /app/start.sh)
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app

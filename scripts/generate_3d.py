@@ -122,7 +122,13 @@ def evaluate_mesh_quality(mesh: trimesh.Trimesh, config: dict) -> MeshQualityRep
 
 def repair_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     repaired = mesh.copy()
-    repaired.remove_degenerate_faces()
+    # Trimesh API differs across versions; support both old and new paths.
+    if hasattr(repaired, "remove_degenerate_faces"):
+        repaired.remove_degenerate_faces()
+    else:
+        nondegenerate = repaired.nondegenerate_faces() if hasattr(repaired, "nondegenerate_faces") else None
+        if nondegenerate is not None:
+            repaired.update_faces(nondegenerate)
     trimesh.repair.fix_normals(repaired)
     trimesh.repair.fill_holes(repaired)
     repaired.remove_unreferenced_vertices()
