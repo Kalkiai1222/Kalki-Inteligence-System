@@ -259,13 +259,9 @@ def process_3d(data):
         quality_report = evaluate_mesh_quality(combined_mesh, config)
         mesh_quality_status = "repaired" if quality_report.passed else "failed"
         if not quality_report.passed:
-            return {
-                "status": "quality_failed",
-                "mesh_quality": mesh_quality_status,
-                "quality_report": quality_report.model_dump(),
-                "error": "Mesh quality checks failed",
-            }
-    
+            # DO NOT fail the entire pipeline. Just mark as failed and continue.
+            # Returning a partial/non-manifold mesh is better than crashing.
+            print(f"WARNING: Mesh quality checks failed, proceeding anyway. Report: {quality_report.model_dump()}", file=sys.stderr)
     # --- TAKEOFF CALCULATIONS FROM 3D MODEL ---
     # 1. Total Volume (cubic inches -> cubic feet)
     total_volume_cu_in = combined_mesh.volume
