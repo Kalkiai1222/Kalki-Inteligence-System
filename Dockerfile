@@ -82,11 +82,21 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
-# Copy and fix the startup script (ensures LF line endings)
+# Copy and fix the startup script (ensures LF line endings and no BOM)
 COPY scripts/start.sh /app/start.sh
-RUN sed -i '1s/^\xEF\xBB\xBF//' /app/start.sh && \
-    chmod +x /app/start.sh && \
-    (dos2unix /app/start.sh 2>/dev/null || sed -i 's/\r$//' /app/start.sh)
+RUN chmod +x /app/start.sh && \
+    python3 -c "
+import sys
+with open('/app/start.sh', 'rb') as f:
+    content = f.read()
+# Remove BOM if present
+if content.startswith(b'\\xef\\xbb\\xbf'):
+    content = content[3:]
+# Convert CRLF to LF
+content = content.replace(b'\\r\\n', b'\\n').replace(b'\\r', b'\\n')
+with open('/app/start.sh', 'wb') as f:
+    f.write(content)
+"
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app

@@ -3,7 +3,7 @@ opencv-python-headless
 pymupdf
 shapely
 networkx
-trimesh
+trimesh==3.22.2
 mapbox-earcut
 triangle
 scipy

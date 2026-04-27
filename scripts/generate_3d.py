@@ -122,16 +122,36 @@ def evaluate_mesh_quality(mesh: trimesh.Trimesh, config: dict) -> MeshQualityRep
 
 def repair_mesh(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     repaired = mesh.copy()
-    # Trimesh API differs across versions; support both old and new paths.
-    if hasattr(repaired, "remove_degenerate_faces"):
-        repaired.remove_degenerate_faces()
-    else:
-        nondegenerate = repaired.nondegenerate_faces() if hasattr(repaired, "nondegenerate_faces") else None
-        if nondegenerate is not None:
-            repaired.update_faces(nondegenerate)
-    trimesh.repair.fix_normals(repaired)
-    trimesh.repair.fill_holes(repaired)
-    repaired.remove_unreferenced_vertices()
+    
+    # Remove degenerate faces (version-adaptive)
+    try:
+        if hasattr(repaired, "remove_degenerate_faces"):
+            repaired.remove_degenerate_faces()
+        else:
+            nondegenerate = repaired.nondegenerate_faces() if hasattr(repaired, "nondegenerate_faces") else None
+            if nondegenerate is not None:
+                repaired.update_faces(nondegenerate)
+    except Exception as e:
+        logging.warning(f"Failed to remove degenerate faces: {e}")
+    
+    # Fix normals (defensive)
+    try:
+        trimesh.repair.fix_normals(repaired)
+    except Exception as e:
+        logging.warning(f"Failed to fix normals: {e}")
+    
+    # Fill holes (defensive)
+    try:
+        trimesh.repair.fill_holes(repaired)
+    except Exception as e:
+        logging.warning(f"Failed to fill holes: {e}")
+    
+    # Remove unreferenced vertices (defensive)
+    try:
+        repaired.remove_unreferenced_vertices()
+    except Exception as e:
+        logging.warning(f"Failed to remove unreferenced vertices: {e}")
+    
     return repaired
 
 def generate_step_export(walls, height):
