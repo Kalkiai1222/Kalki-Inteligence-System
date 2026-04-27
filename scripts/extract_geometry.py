@@ -8,6 +8,12 @@ import networkx as nx
 from shapely.geometry import LineString, Polygon, box
 from shapely.ops import unary_union, polygonize
 
+# NumPy 2.0 compatibility: np.product was deprecated and removed, use np.prod instead
+# (May be used by imported libraries)
+import numpy as np
+if not hasattr(np, 'product'):
+    np.product = np.prod
+
 # Import new modular geometry logic
 from geometry.raster_extraction import build_segments_from_raster
 from shapely.affinity import scale

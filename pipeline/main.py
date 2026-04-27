@@ -6,6 +6,11 @@ import uuid
 from typing import Any, Dict, List
 from pydantic import BaseModel, ValidationError
 
+# NumPy 2.0 compatibility patch (before any imports that might use numpy)
+import numpy as np
+if not hasattr(np, 'product'):
+    np.product = np.prod
+
 # Map the "scripts" folder to python path so we can import modules natively
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts")))
 

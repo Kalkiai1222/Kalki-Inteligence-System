@@ -6,6 +6,10 @@ import cv2
 import fitz  # PyMuPDF
 import os
 
+# NumPy 2.0 compatibility: np.product was deprecated and removed, use np.prod instead
+if not hasattr(np, 'product'):
+    np.product = np.prod
+
 # Import our new modular ingestion script
 from ingestion.raster_parser import extract_contours_from_image
 

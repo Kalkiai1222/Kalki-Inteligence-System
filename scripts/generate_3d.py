@@ -10,6 +10,11 @@ import numpy as np
 import yaml
 from pydantic import BaseModel
 
+# NumPy 2.0 compatibility: np.product was deprecated and removed, use np.prod instead
+# This patch ensures compatibility with libraries that still call np.product
+if not hasattr(np, 'product'):
+    np.product = np.prod
+
 
 def extrude_polygon_safe(polygon: Polygon, height: float) -> trimesh.Trimesh:
     """
