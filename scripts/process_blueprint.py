@@ -12,15 +12,15 @@ import logging
 # ──────────────────────────────────────────────────────────────────────
 # CONFIGURATION — tune these for your container's RAM / CPU budget
 # ──────────────────────────────────────────────────────────────────────
-MAX_PATHS_PER_IMAGE = 1000        # hard cap per single embedded image
-MAX_TOTAL_PATHS_PER_PAGE = 5000   # hard cap across ALL images on one page
-MAX_IMAGE_DIM = 2000              # downscale any axis beyond this
-MIN_IMAGE_DIM = 300               # skip images smaller than this (logos, icons)
-PAGE_TIME_BUDGET_SEC = 60         # skip remaining images on a page after this
-MAX_IMAGES_PER_PAGE = 12          # skip excess images on extremely dense pages
-MAX_VECTOR_DRAWINGS_PER_PAGE = 50000  # skip vector extraction if page is insanely dense
-MAX_LINES_PER_PAGE = 15000        # limit raw 'l' lines to prevent JSON bloat
-MAX_TOTAL_LINES = 75000           # limit total lines across entire document
+MAX_PATHS_PER_IMAGE = 500         # tight cap per image
+MAX_TOTAL_PATHS_PER_PAGE = 2000   # tight cap across ALL images on one page
+MAX_IMAGE_DIM = 1000              # aggressively downscale any axis beyond this
+MIN_IMAGE_DIM = 400               # skip images smaller than this (logos, icons)
+PAGE_TIME_BUDGET_SEC = 30         # skip remaining images on a page after this
+MAX_IMAGES_PER_PAGE = 8           # skip excess images on extremely dense pages
+MAX_VECTOR_DRAWINGS_PER_PAGE = 20000  # skip vector extraction if page is insanely dense
+MAX_LINES_PER_PAGE = 3000         # strict limit raw 'l' lines to prevent JSON bloat
+MAX_TOTAL_LINES = 20000           # strict limit total lines across entire document
 
 # ──────────────────────────────────────────────────────────────────────
 # LOGGING
@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 # NumPy 2.0 compatibility
 if not hasattr(np, 'product'):
     np.product = np.prod
+
+# Force OpenCV to use fewer threads to save memory
+cv2.setNumThreads(1)
 
 logger.info(f'Python version: {sys.version}')
 logger.info(f'Working directory: {os.getcwd()}')
