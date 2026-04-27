@@ -60,7 +60,24 @@ def process_file(file_path):
             if cv_img is None:
                 raise ValueError(f"cv2.imread failed to load image: {file_path}. File may be corrupted.")
             logger.info(f'Image loaded: shape={cv_img.shape}')
+            h, w = cv_img.shape[:2]
+            
+            # Downscale excessively large images to prevent OOM
+            MAX_DIM = 4000
+            if max(h, w) > MAX_DIM:
+                scale = MAX_DIM / max(h, w)
+                new_w, new_h = int(w * scale), int(h * scale)
+                cv_img = cv2.resize(cv_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                logger.info(f'Resized large image from {w}x{h} to {new_w}x{new_h}')
+            
             img_paths = extract_from_image(cv_img, 0)
+            
+            # Cap the number of paths extracted
+            MAX_PATHS_PER_IMAGE = 5000
+            if len(img_paths) > MAX_PATHS_PER_IMAGE:
+                logger.warning(f'Capping extracted paths from {len(img_paths)} to {MAX_PATHS_PER_IMAGE}')
+                img_paths = img_paths[:MAX_PATHS_PER_IMAGE]
+                
             paths.extend(img_paths)
             logger.info(f'Extracted {len(img_paths)} paths from image')
         except Exception as e:
@@ -170,7 +187,29 @@ def process_file(file_path):
                                     cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                                     
                                     if cv_img is not None:
+                                        h, w = cv_img.shape[:2]
+                                        
+                                        # Skip tiny images (e.g. logos, icons, artifacts)
+                                        if h < 500 and w < 500:
+                                            logger.debug(f'Skipping small embedded image {img_index} ({w}x{h}) on page {page_num}')
+                                            continue
+                                            
+                                        # Downscale excessively large images to prevent OOM
+                                        MAX_DIM = 4000
+                                        if max(h, w) > MAX_DIM:
+                                            scale = MAX_DIM / max(h, w)
+                                            new_w, new_h = int(w * scale), int(h * scale)
+                                            cv_img = cv2.resize(cv_img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                                            logger.debug(f'Resized large embedded image {img_index} from {w}x{h} to {new_w}x{new_h}')
+
                                         img_paths = extract_from_image(cv_img, page_num)
+                                        
+                                        # Cap the number of paths extracted from a single image to prevent JSON bloat
+                                        MAX_PATHS_PER_IMAGE = 5000
+                                        if len(img_paths) > MAX_PATHS_PER_IMAGE:
+                                            logger.warning(f'Capping extracted paths for image {img_index} from {len(img_paths)} to {MAX_PATHS_PER_IMAGE}')
+                                            img_paths = img_paths[:MAX_PATHS_PER_IMAGE]
+                                            
                                         paths.extend(img_paths)
                                         logger.debug(f'Extracted {len(img_paths)} paths from embedded image {img_index}')
                                     else:
