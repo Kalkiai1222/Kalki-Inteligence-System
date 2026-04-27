@@ -10,9 +10,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { createHash } from 'crypto';
 import os from 'os';
 
-const INGESTION_TIMEOUT_MS = Number(process.env.PIPELINE_INGESTION_TIMEOUT_MS || 180000);
+const INGESTION_TIMEOUT_MS = Number(process.env.PIPELINE_INGESTION_TIMEOUT_MS || 900000);
 const GEOMETRY_TIMEOUT_MS = Number(process.env.PIPELINE_GEOMETRY_TIMEOUT_MS || 300000);
 const RECONSTRUCTION_TIMEOUT_MS = Number(process.env.PIPELINE_3D_TIMEOUT_MS || 300000);
+
+function getIngestionTimeout(fileSize?: number): number {
+  if (!fileSize || fileSize <= 0) return INGESTION_TIMEOUT_MS;
+  const dynamic = Math.min(15 * 60 * 1000, Math.max(INGESTION_TIMEOUT_MS, Math.ceil(fileSize / (1024 * 1024)) * 75000));
+  return dynamic;
+}
 
 function sha256File(path: string): string {
   const content = readFileSync(path);
@@ -152,20 +158,30 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         throw new Error('No usable Python interpreter found for blueprint pipeline');
       }
 
+      const ingestionTimeout = getIngestionTimeout(fileSize);
+      console.log(`[Pipeline] Running ingestion with timeout ${ingestionTimeout}ms for file size ${fileSize ?? 'unknown'}`);
       let blueprintData = null;
       try {
         const output = execFileSync(pythonExe, [pyScript, localPath], {
           encoding: 'utf-8',
-          maxBuffer: 50 * 1024 * 1024,
+          maxBuffer: 100 * 1024 * 1024,
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: INGESTION_TIMEOUT_MS,
+          timeout: ingestionTimeout,
         });
         blueprintData = parseJsonFromMixedOutput(output);
       } catch (err: any) {
+        const stdoutLog = typeof err?.stdout === 'string' ? err.stdout.trim().slice(0, 20000) : '';
+        const stderrLog = typeof err?.stderr === 'string' ? err.stderr.trim().slice(0, 20000) : '';
         const detail = err?.code === 'ETIMEDOUT'
-          ? 'Timeout (120s) - file too complex'
+          ? `Timeout (${Math.round(ingestionTimeout / 1000)}s) - file too complex or too large`
           : toErrorMessage(err);
-        throw new Error(`PIPELINE_STAGE_INGESTION_FAILED: ${detail}`);
+        console.error('[Pipeline] ingestion error', {
+          detail,
+          code: err?.code,
+          stdout: stdoutLog,
+          stderr: stderrLog,
+        });
+        throw new Error(`PIPELINE_STAGE_INGESTION_FAILED: ${detail}${stderrLog ? ` | stderr: ${stderrLog}` : ''}${stdoutLog ? ` | stdout: ${stdoutLog}` : ''}`);
       }
 
       if (!blueprintData || blueprintData.status !== 'success' || !blueprintData.data) {
@@ -176,24 +192,36 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       let model3DData: any = null;
       const geomScript = join(process.cwd(), 'scripts', 'extract_geometry.py');
       try {
+        // Only pass straight-line (Hough) paths to geometry — not polygon contours.
+        // Contour paths are massive, noisy, and represent image textures/details, not walls.
+        // The real structural data is in `lines` (PDF vector lines) + `scanned_line` paths.
+        const MAX_GEOM_PATHS = 3000;
+        const filteredPaths = (blueprintData.data.paths as any[] || [])
+          .filter((p: any) => p.type === 'scanned_line')
+          .slice(0, MAX_GEOM_PATHS);
+
         const geomOutput = execFileSync(pythonExe, [geomScript], {
           input: JSON.stringify({
-            ...blueprintData.data,
+            lines: blueprintData.data.lines || [],
+            paths: filteredPaths,
+            text: blueprintData.data.text || [],
+            dimensions: blueprintData.data.dimensions || [],
+            notes: blueprintData.data.notes || [],
+            annotations: blueprintData.data.annotations || [],
             companyId: id,
             manualScale: item.manualScale || undefined,
             settings: {
               ...(item.settings || {}),
-              // Classification can be expensive and is non-critical for geometry extraction.
               enableSemanticClassification: item.settings?.enableSemanticClassification ?? false,
             },
           }),
           encoding: 'utf-8',
-          maxBuffer: 50 * 1024 * 1024,
+          maxBuffer: 100 * 1024 * 1024,
           timeout: GEOMETRY_TIMEOUT_MS,
         });
         geometryData = parseJsonFromMixedOutput(geomOutput);
       } catch (err: any) {
-        const detail = err?.code === 'ETIMEDOUT' ? 'Timeout (120s)' : toErrorMessage(err);
+        const detail = err?.code === 'ETIMEDOUT' ? `Timeout (${Math.round(GEOMETRY_TIMEOUT_MS / 1000)}s)` : toErrorMessage(err);
         throw new Error(`PIPELINE_STAGE_GEOMETRY_FAILED: ${detail}`);
       }
 
