@@ -84,18 +84,9 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 
 # Copy and fix the startup script (ensures LF line endings and no BOM)
 COPY scripts/start.sh /app/start.sh
-RUN chmod +x /app/start.sh && python3 << 'EOF'
-import sys
-with open('/app/start.sh', 'rb') as f:
-    content = f.read()
-# Remove BOM if present
-if content.startswith(b'\xef\xbb\xbf'):
-    content = content[3:]
-# Convert CRLF to LF
-content = content.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
-with open('/app/start.sh', 'wb') as f:
-    f.write(content)
-EOF
+RUN chmod +x /app/start.sh && \
+    sed -i '1s/^\xEF\xBB\xBF//' /app/start.sh && \
+    dos2unix /app/start.sh 2>/dev/null || sed -i 's/\r$//' /app/start.sh
 
 # Set correct permissions
 RUN chown -R nextjs:nodejs /app
