@@ -124,7 +124,25 @@ export async function POST(request: NextRequest) {
 
       pyProcess.stderr.on("data", (data) => {
         stderrData += data.toString();
-        console.log(`[Python Pipeline]`, data.toString().trim());
+        // Log stderr in real-time for debugging
+        console.log(`[Python stderr] ${data.toString().trim()}`);
+      });
+
+      pyProcess.on("error", (err) => {
+        if (processCompleted) return;
+        processCompleted = true;
+        clearTimeout(timeout);
+        console.error(`[Python spawn error] ${err.message}`);
+        return resolve(
+          NextResponse.json(
+            {
+              error: "Failed to spawn Python process",
+              details: err.message,
+              stage: "SPAWN_FAILURE"
+            },
+            { status: 500 }
+          )
+        );
       });
 
       pyProcess.on("close", (code) => {
@@ -132,30 +150,75 @@ export async function POST(request: NextRequest) {
         processCompleted = true;
         clearTimeout(timeout);
 
+        // Log all output for debugging regardless of exit code
+        if (stderrData) {
+          console.log(`[Python stderr output]\n${stderrData}`);
+        }
+        if (stdoutData) {
+          console.log(`[Python stdout output]\n${stdoutData}`);
+        }
+
         if (code !== 0) {
-          console.error(`Pipeline exited with code ${code}`);
-          console.error(`stderr output: ${stderrData}`);
-          console.error(`stdout output: ${stdoutData}`);
+          console.error(`[Process exit] Pipeline exited with code ${code}`);
+          
+          // Try to extract error JSON from stdout (Python error output format)
+          let errorResponse: any = {
+            error: "Blueprint processing failed",
+            stage: "UNKNOWN",
+            exitCode: code
+          };
+
+          // Attempt to parse JSON from stdout
+          try {
+            const parsed = JSON.parse(stdoutData.trim());
+            if (parsed.error) {
+              errorResponse = {
+                ...errorResponse,
+                ...parsed,
+                exitCode: code
+              };
+            }
+          } catch (parseErr) {
+            // If stdout isn't JSON, include both stdout and stderr in response
+            errorResponse.stderrOutput = stderrData;
+            errorResponse.stdoutOutput = stdoutData;
+          }
+
           return resolve(
-            NextResponse.json(
-              { error: "Pipeline processing failed", details: stderrData, stdout: stdoutData },
-              { status: 500 }
-            )
+            NextResponse.json(errorResponse, { status: 500 })
           );
         }
 
         try {
           // Parse the strict JSON output expected from main.py
           const result = JSON.parse(stdoutData.trim());
-          console.log(`Pipeline succeeded: Generated 3D models and takeoff`);
+          
+          if (result.error) {
+            // Python returned a proper error JSON
+            console.error(`[Pipeline error] ${result.error}`);
+            if (result.traceback) {
+              console.error(`[Python traceback]\n${result.traceback}`);
+            }
+            return resolve(
+              NextResponse.json(result, { status: 500 })
+            );
+          }
+
+          console.log(`[Pipeline success] Generated 3D models and takeoff`);
           return resolve(NextResponse.json(result, { status: 200 }));
         } catch (e: any) {
-          console.error("Failed to parse pipeline output:", e.message);
-          console.error("stdout:", stdoutData);
-          console.error("stderr:", stderrData);
+          console.error(`[JSON parse error] Failed to parse pipeline output: ${e.message}`);
+          console.error(`[Raw stdout]\n${stdoutData}`);
+          console.error(`[Raw stderr]\n${stderrData}`);
           return resolve(
             NextResponse.json(
-              { error: "Invalid JSON from pipeline", raw: stdoutData, stderr: stderrData },
+              {
+                error: "Invalid JSON from pipeline",
+                parseError: e.message,
+                stdoutOutput: stdoutData,
+                stderrOutput: stderrData,
+                stage: "JSON_PARSE_ERROR"
+              },
               { status: 500 }
             )
           );

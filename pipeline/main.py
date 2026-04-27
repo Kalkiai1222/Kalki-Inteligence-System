@@ -3,6 +3,7 @@ import os
 import json
 import logging
 import uuid
+import traceback
 from typing import Any, Dict, List
 from pydantic import BaseModel, ValidationError
 
@@ -53,7 +54,8 @@ def run_pipeline(blueprint_path: str):
         ingest_out = process_file(blueprint_path)
     except Exception as e:
         logging.error(f"Ingestion failed: {e}")
-        raise ValueError(f"Ingestion Module Error: {e}")
+        logging.error(traceback.format_exc())
+        raise ValueError(f"Ingestion Module Error: {e}\n{traceback.format_exc()}")
         
     if "error" in ingest_out:
          raise ValueError(f"Ingestion error: {ingest_out['error']}")
@@ -86,7 +88,8 @@ def run_pipeline(blueprint_path: str):
             geom_data = geom_output
     except Exception as e:
         logging.error(f"Geometry Extraction failed: {e}")
-        raise ValueError(f"Geometry Module Error: {e}")
+        logging.error(traceback.format_exc())
+        raise ValueError(f"Geometry Module Error: {e}\n{traceback.format_exc()}")
 
     if "error" in geom_data:
         raise ValueError(f"Geometry error: {geom_data['error']}")
@@ -112,7 +115,8 @@ def run_pipeline(blueprint_path: str):
         td_data = process_3d(reconstruction_payload)
     except Exception as e:
         logging.error(f"3D Reconstruction failed: {e}")
-        raise ValueError(f"Reconstruction Module Error: {e}")
+        logging.error(traceback.format_exc())
+        raise ValueError(f"Reconstruction Module Error: {e}\n{traceback.format_exc()}")
 
     if "error" in td_data:
         raise ValueError(f"3D Reconstruction error: {td_data['error']}")
@@ -163,20 +167,74 @@ def run_pipeline(blueprint_path: str):
     return final_output
 
 if __name__ == "__main__":
+    import traceback
+    
     if len(sys.argv) < 2:
-        print("Usage: python main.py <path_to_blueprint_pdf>")
+        error_output = {
+            "error": "Usage: python main.py <path_to_blueprint_pdf>",
+            "stage": "INITIALIZATION",
+            "type": "UsageError",
+            "traceback": ""
+        }
+        print(json.dumps(error_output))
         sys.exit(1)
         
     blueprint = sys.argv[1]
     if not os.path.exists(blueprint):
-        print(json.dumps({"error": f"File not found: {blueprint}"}))
+        error_output = {
+            "error": f"File not found: {blueprint}",
+            "stage": "INITIALIZATION",
+            "type": "FileNotFoundError",
+            "file_path": blueprint,
+            "traceback": f"File does not exist at path: {blueprint}"
+        }
+        print(json.dumps(error_output))
         sys.exit(1)
         
     try:
         # Final output format precisely as requested
         result = run_pipeline(blueprint)
         print(json.dumps(result, indent=2))
+        sys.exit(0)
+    except PipelineHandoffError as e:
+        error_output = {
+            "error": str(e),
+            "stage": "HANDOFF_VALIDATION",
+            "type": "PipelineHandoffError",
+            "traceback": traceback.format_exc()
+        }
+        print(json.dumps(error_output), file=sys.stderr)
+        print(json.dumps(error_output))
+        sys.exit(1)
+    except ValueError as e:
+        # ValueError is raised by run_pipeline for specific stage errors
+        error_msg = str(e)
+        stage = "UNKNOWN"
+        if "Ingestion" in error_msg:
+            stage = "PIPELINE_STAGE_INGESTION_FAILED"
+        elif "Geometry" in error_msg:
+            stage = "PIPELINE_STAGE_GEOMETRY_FAILED"
+        elif "Reconstruction" in error_msg or "3D" in error_msg:
+            stage = "PIPELINE_STAGE_3D_FAILED"
+        
+        error_output = {
+            "error": error_msg,
+            "stage": stage,
+            "type": "ValueError",
+            "traceback": traceback.format_exc()
+        }
+        print(json.dumps(error_output), file=sys.stderr)
+        print(json.dumps(error_output))
+        sys.exit(1)
     except Exception as e:
-        logging.error(f"Pipeline crashed: {e}")
-        print(json.dumps({"error": str(e)}))
+        # Catch all other exceptions
+        error_output = {
+            "error": f"Unexpected pipeline error: {str(e)}",
+            "stage": "PIPELINE_EXECUTION",
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc(),
+            "blueprint_path": blueprint
+        }
+        print(json.dumps(error_output), file=sys.stderr)
+        print(json.dumps(error_output))
         sys.exit(1)
